@@ -14,9 +14,9 @@ class ClientProtocol(QuicConnectionProtocol):
 
     async def send_data(self, data):
         stream_id = self._quic.get_next_available_stream_id()
-        self._quic.send_stream_data(stream_id, data.encode(), end_stream=True)
+        self._quic.send_stream_data(stream_id, data.encode(), end_stream=False)
         self.transmit()
-        print(f"[client] Sent data: {data}")
+        print(f"[client] Sent data: {len(data)} Bytes")
 
 class QuicClient:
     def __init__(self, host, port, queue):
@@ -34,17 +34,22 @@ class QuicClient:
             
             # Send data from the queue to the server
             while True:
-                print("test")
+
                 data = await self.queue.get()
                 if data is None:
+                    print("[client] Provider stopped data stream, closing stream.")
                     # Gracefully disconnect when no more data is available
                     connection._quic.send_stream_data(0, b'', end_stream=True)  # Close the stream
+                    connection.transmit();
                     break  # Exit the loop after sending the disconnect signal
                 await connection.send_data(data)
                 await asyncio.sleep(0)  # Let the event loop process other tasks
 
             # Disconnect the QUIC connection when done
-            await connection.close()
+            print("All done. Connection is being closed...")
+            connection.close()
+            await connection.wait_closed()
+            print("Client Shutdown.")
 
 async def main():
     queue = asyncio.Queue()
@@ -61,19 +66,22 @@ async def main():
             print(f"[provider] Pushed: Data {counter} ({len(data)} bytes)")
 
             counter += 1
+            if(counter >= 5): break
             await asyncio.sleep(1)  # Sleep for 1 second to maintain the rate of 2 MB/s
 
-    # Signal that the provider is done when it finishes
-    await queue.put(None)
+        # Signal that the provider is done when it finishes
+        await queue.put(None)
+
+    
 
     # Start the client and provider tasks
     client = QuicClient('localhost', 4433, queue) 
-    #provider_task = asyncio.create_task(provider(queue, data_rate=2))
+    provider_task = asyncio.create_task(provider(queue, data_rate=2))
     
     client_task = asyncio.create_task(client.run())
 
     # Wait for both tasks to finish
-    await asyncio.gather(client_task)
+    await asyncio.gather( provider_task, client_task)
 
 if __name__ == "__main__":
     asyncio.run(main())
