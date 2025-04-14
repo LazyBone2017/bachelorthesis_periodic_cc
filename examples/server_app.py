@@ -14,7 +14,7 @@ class EchoProtocol(QuicConnectionProtocol):
 
 # Start the server and listen for connections
 async def main():
-    config = QuicConfiguration(is_client=False, alpn_protocols=["hq-29"])
+    config = QuicConfiguration(is_client=False, alpn_protocols=["hq-29"], congestion_control_algorithm="periodic")
     config.load_cert_chain(certfile="../tests/ssl_cert.pem", keyfile="../tests/ssl_key.pem")
     port = 4433
     host = "localhost"

@@ -23,7 +23,7 @@ class QuicClient:
         self.host = host
         self.port = port
         self.queue = queue
-        self.configuration = QuicConfiguration(is_client=True, alpn_protocols=["hq-29"])  # QUIC with HTTP/3
+        self.configuration = QuicConfiguration(is_client=True, alpn_protocols=["hq-29"], congestion_control_algorithm="periodic")  # QUIC with HTTP/3
         self.configuration.verify_mode = False  # Disable certificate verification for testing
         self.configuration.secrets_log_file=open("secrets.log", "a");
 
