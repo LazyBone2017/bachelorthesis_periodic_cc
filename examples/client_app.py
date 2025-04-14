@@ -25,6 +25,7 @@ class QuicClient:
         self.queue = queue
         self.configuration = QuicConfiguration(is_client=True, alpn_protocols=["hq-29"])  # QUIC with HTTP/3
         self.configuration.verify_mode = False  # Disable certificate verification for testing
+        self.configuration.secrets_log_file=open("secrets.log", "a");
 
     async def run(self):
         # Establish the QUIC connection
@@ -33,6 +34,7 @@ class QuicClient:
             
             # Send data from the queue to the server
             while True:
+                print("test")
                 data = await self.queue.get()
                 if data is None:
                     # Gracefully disconnect when no more data is available
@@ -48,20 +50,30 @@ async def main():
     queue = asyncio.Queue()
 
     # Simulating a provider feeding data to the queue
-    async def provider(queue):
-        # Example provider data
-        for i in range(5):
-            await queue.put(f"Data {i}")
-            await asyncio.sleep(1)  # Simulate some delay
-        await queue.put(None)  # Signal that the provider is done
+    async def provider(queue, data_rate=2):
+        chunk_size = 2 * 1024 * 1024  # 2 MB in bytes
+        counter = 0
+
+        while True:
+            # Generate 2 MB of dummy data (you can replace this with real data)
+            data = f"Data {counter}".ljust(chunk_size, 'X')  # Create a string of size 2 MB
+            await queue.put(data)
+            print(f"[provider] Pushed: Data {counter} ({len(data)} bytes)")
+
+            counter += 1
+            await asyncio.sleep(1)  # Sleep for 1 second to maintain the rate of 2 MB/s
+
+    # Signal that the provider is done when it finishes
+    await queue.put(None)
 
     # Start the client and provider tasks
-    client = QuicClient('localhost', 4433, queue)
-    provider_task = asyncio.create_task(provider(queue))
+    client = QuicClient('localhost', 4433, queue) 
+    #provider_task = asyncio.create_task(provider(queue, data_rate=2))
+    
     client_task = asyncio.create_task(client.run())
 
     # Wait for both tasks to finish
-    await asyncio.gather(provider_task, client_task)
+    await asyncio.gather(client_task)
 
 if __name__ == "__main__":
     asyncio.run(main())
