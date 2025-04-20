@@ -31,7 +31,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._start_time = time.time()
         self._base_cwnd = 10000  # baseline in bytes
         self._amplitude = 8000   # how much the window fluctuates
-        self._frequency = 5    # how fast it oscillates (in Hz)   
+        self._frequency = 0.1   # how fast it oscillates (in Hz)   
 
 
     def _update_congestion_window(self) -> None:
@@ -45,11 +45,11 @@ class PeriodicCongestionControl(QuicCongestionControl):
 
 
     def on_packet_acked(self, *, now: float, packet: QuicSentPacket) -> None:
-        #PKT_TRANSPORT_LOG.append(["ACK", packet.packet_number, time.time()])
+        PKT_TRANSPORT_LOG.append(["ACK", time.time(), packet.packet_number, self.congestion_window])
         self._update_congestion_window()  # Update window size
         self.bytes_in_flight -= packet.sent_bytes
 
-        if packet.sent_time <= self._congestion_recovery_start_time:
+        '''if packet.sent_time <= self._congestion_recovery_start_time:
             return
 
         if self.ssthresh is None or self.congestion_window < self.ssthresh:
@@ -61,12 +61,12 @@ class PeriodicCongestionControl(QuicCongestionControl):
             count = self._congestion_stash // self.congestion_window
             if count:
                  self._congestion_stash -= count * self.congestion_window
-                 self.congestion_window += count * self._max_datagram_size
+                 self.congestion_window += count * self._max_datagram_size'''
 
 
     def on_packet_sent(self, *, packet: QuicSentPacket) -> None:
         self.bytes_in_flight += packet.sent_bytes
-        PKT_TRANSPORT_LOG.append(["SENT", time.time(), packet.packet_number])
+        PKT_TRANSPORT_LOG.append(["SENT", time.time(), packet.packet_number, self.congestion_window])
 
     def on_packets_expired(self, *, packets: Iterable[QuicSentPacket]) -> None:
         for packet in packets:
@@ -79,19 +79,20 @@ class PeriodicCongestionControl(QuicCongestionControl):
             self.bytes_in_flight -= packet.sent_bytes
             lost_largest_time = packet.sent_time
 
-        if lost_largest_time > self._congestion_recovery_start_time:
+        '''if lost_largest_time > self._congestion_recovery_start_time:
             self._congestion_recovery_start_time = now
             self.congestion_window = max(
                int(self.congestion_window * K_LOSS_REDUCTION_FACTOR),
                K_MINIMUM_WINDOW * self._max_datagram_size,
            )
-            self.ssthresh = self.congestion_window
+            self.ssthresh = self.congestion_window'''
 
         self._update_congestion_window()  # Modulate window after loss event
 
 
     def on_rtt_measurement(self, *, now: float, rtt: float) -> None:
         # check whether we should exit slow start
+        return
         if self.ssthresh is None and self._rtt_monitor.is_rtt_increasing(
             now=now, rtt=rtt
         ):

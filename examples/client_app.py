@@ -6,6 +6,10 @@ from aioquic.quic.configuration import QuicConfiguration
 from aioquic.quic.events import HandshakeCompleted
 from aioquic.asyncio import QuicConnectionProtocol
 from aioquic.quic.congestion.periodic import PKT_TRANSPORT_LOG
+import tkinter as tk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 class ClientProtocol(QuicConnectionProtocol):
@@ -31,15 +35,19 @@ def save_to_csv(filename, data, fieldnames):
 def condense(log, period):
     cutoff = log[0][1] + period
     rate_log = []
-    pkt_count = 0
+    pkt_count_s = 0
+    pkt_count_a = 0
     n = 0
     for i in log:
         if(i[1] >= cutoff):
             cutoff += period
-            rate_log.append([n, pkt_count])
+            rate_log.append([n, pkt_count_s, pkt_count_a, i[3]])
             n += 1
-            pkt_count = 1
-        pkt_count += 1
+            pkt_count_a = 1
+            pkt_count_s = 1
+        if(i[0] == "ACK"):
+            pkt_count_a += 1
+        else: pkt_count_s += 1
     return rate_log
 
 
@@ -78,6 +86,7 @@ class QuicClient:
             rate_log = condense(PKT_TRANSPORT_LOG, 0.1)
             save_to_csv("packet_rate.csv", rate_log, ["TYPE", "PACKET_NUM", "TIME"])
             save_to_csv("packet_log.csv", PKT_TRANSPORT_LOG, ["TYPE", "PACKET_NUM", "TIME"])
+            plot_graph(rate_log)
             print("Client Shutdown.")
 
 async def main():
@@ -95,7 +104,7 @@ async def main():
             print(f"[provider] Pushed: Data {counter} ({len(data)} bytes)")
 
             counter += 1
-            if(counter >= 2): break
+            if(counter >= 30): break
             await asyncio.sleep(1)  # Sleep for 1 second to maintain the rate of 2 MB/s
 
         # Signal that the provider is done when it finishes
@@ -105,12 +114,46 @@ async def main():
 
     # Start the client and provider tasks
     client = QuicClient('localhost', 4433, queue) 
-    provider_task = asyncio.create_task(provider(queue, data_rate=10))
+    provider_task = asyncio.create_task(provider(queue, data_rate=1))
     
     client_task = asyncio.create_task(client.run())
 
     # Wait for both tasks to finish
     await asyncio.gather( provider_task, client_task)
+
+
+def plot_graph(data):
+    x = [v[0] for v in data]
+    y = [v[1] for v in data]
+    z = [v[2] for v in data]
+    c = [v[3] / 1000 for v in data]
+
+    fig, ax = plt.subplots()
+    ax.plot(x, y)
+    ax.plot(x, z)
+    ax.plot(x, c)
+    ax.set_title("Sine Wave")
+
+    ax.set_title("Graph from Points")
+    ax.set_xlabel("Time(s)")
+    ax.set_ylabel("n packets")
+
+    window = tk.Tk()
+    window.title("Graph Viewer")
+    window.geometry("1920x1080")
+
+    canvas = FigureCanvasTkAgg(fig, master=window)
+    canvas.draw()
+    canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+    def on_closing():
+        window.destroy()
+        window.quit()
+
+    
+    window.protocol("WM_DELETE_WINDOW", on_closing)
+
+    window.mainloop()
 
 if __name__ == "__main__":
     asyncio.run(main())
