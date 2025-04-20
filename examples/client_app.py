@@ -1,8 +1,12 @@
 import asyncio
+import csv
+import os
 from aioquic.asyncio import connect
 from aioquic.quic.configuration import QuicConfiguration
 from aioquic.quic.events import HandshakeCompleted
 from aioquic.asyncio import QuicConnectionProtocol
+from aioquic.quic.congestion.periodic import PKT_TRANSPORT_LOG
+
 
 class ClientProtocol(QuicConnectionProtocol):
     def __init__(self, *args, **kwargs):
@@ -17,6 +21,28 @@ class ClientProtocol(QuicConnectionProtocol):
         self._quic.send_stream_data(stream_id, data.encode(), end_stream=False)
         self.transmit()
         print(f"[client] Sent data: {len(data)} Bytes")
+
+
+def save_to_csv(filename, data, fieldnames):
+    with open(filename, mode='w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerows(data)
+
+def condense(log, period):
+    cutoff = log[0][1] + period
+    rate_log = []
+    pkt_count = 0
+    n = 0
+    for i in log:
+        if(i[1] >= cutoff):
+            cutoff += period
+            rate_log.append([n, pkt_count])
+            n += 1
+            pkt_count = 1
+        pkt_count += 1
+    return rate_log
+
+
 
 class QuicClient:
     def __init__(self, host, port, queue):
@@ -49,24 +75,27 @@ class QuicClient:
             print("All done. Connection is being closed...")
             connection.close()
             await connection.wait_closed()
+            rate_log = condense(PKT_TRANSPORT_LOG, 0.1)
+            save_to_csv("packet_rate.csv", rate_log, ["TYPE", "PACKET_NUM", "TIME"])
+            save_to_csv("packet_log.csv", PKT_TRANSPORT_LOG, ["TYPE", "PACKET_NUM", "TIME"])
             print("Client Shutdown.")
 
 async def main():
     queue = asyncio.Queue()
 
     # Simulating a provider feeding data to the queue
-    async def provider(queue, data_rate=2):
-        chunk_size = 2 * 1024 * 1024  # 2 MB in bytes
+    async def provider(queue, data_rate=1):
+        chunk_size = data_rate * 1024 * 1024  #[data_rate] MB in bytes
         counter = 0
 
         while True:
-            # Generate 2 MB of dummy data (you can replace this with real data)
+            # Generate [data_rate] MB of dummy data (you can replace this with real data)
             data = f"Data {counter}".ljust(chunk_size, 'X')  # Create a string of size 2 MB
             await queue.put(data)
             print(f"[provider] Pushed: Data {counter} ({len(data)} bytes)")
 
             counter += 1
-            if(counter >= 5): break
+            if(counter >= 2): break
             await asyncio.sleep(1)  # Sleep for 1 second to maintain the rate of 2 MB/s
 
         # Signal that the provider is done when it finishes
@@ -76,7 +105,7 @@ async def main():
 
     # Start the client and provider tasks
     client = QuicClient('localhost', 4433, queue) 
-    provider_task = asyncio.create_task(provider(queue, data_rate=2))
+    provider_task = asyncio.create_task(provider(queue, data_rate=10))
     
     client_task = asyncio.create_task(client.run())
 
