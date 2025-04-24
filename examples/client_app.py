@@ -151,8 +151,8 @@ def plot_graph(data):
     timestamps = np.array([v[0] for v in LOG])
     congwin = [v[1] for v in LOG]
     in_flight = np.array([v[2] for v in LOG])
-    ack_sizes = [v[3] for v in LOG]
 
+    print("Buidling Spline...")
     spline_params = make_splrep(timestamps, in_flight, s=5)
     print("Spline built")
     timestamps_precise = np.linspace(timestamps.min(), timestamps.max(), 100)
@@ -161,18 +161,11 @@ def plot_graph(data):
         spline_params,
     )
 
-    delta = []
-    i = 0
-    while i < len(timestamps):
-        delta.append(abs(congwin[i] - in_flight[i]))
-        i += 1
-
     fig, ax = plt.subplots()
 
     ax.plot(timestamps, congwin, color="red")
-    # ax.plot(timestamps, in_flight, color="green")
-    ax.plot(timestamps_precise, smoothed)
-    ax.plot(timestamps, delta)
+    ax.plot(timestamps, in_flight, color="green")
+    ax.plot(timestamps_precise, smoothed, color="orange", label="Smoothed")
     ax.set_title("Sine Wave")
 
     ax.set_title("Graph from Points")

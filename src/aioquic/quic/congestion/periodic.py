@@ -36,7 +36,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._start_time = time.monotonic()
         self._base_cwnd = 5000  # baseline in bytes
         self._amplitude = 4000  # how much the window fluctuates
-        self._frequency = 0.5  # how fast it oscillates (in Hz)
+        self._frequency = 0.1  # how fast it oscillates (in Hz)
         asyncio.create_task(self.modulate_congestion_window())
 
     async def modulate_congestion_window(self):
@@ -55,6 +55,9 @@ class PeriodicCongestionControl(QuicCongestionControl):
 
             # set update frequency, inv. proportional to modulation frequency
             await asyncio.sleep(0.001 / self._frequency)  # good constant is 0.001
+
+            # increase base_cwnd in order to simulate congestion
+            # self._base_cwnd += 100 #works shitty
 
     """def _update_congestion_window(self) -> None:
         # Get elapsed time for sine wave modulation
