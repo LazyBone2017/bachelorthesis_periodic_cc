@@ -20,3 +20,5 @@ env.bak/
 venv.bak/
 
 secrets.log
+*.csv
+*.json

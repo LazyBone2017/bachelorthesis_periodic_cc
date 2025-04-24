@@ -4,18 +4,26 @@ from aioquic.quic.configuration import QuicConfiguration
 from aioquic.asyncio.protocol import QuicConnectionProtocol
 from aioquic.quic.events import StreamDataReceived
 
+
 class EchoProtocol(QuicConnectionProtocol):
     def quic_event_received(self, event):
         if isinstance(event, StreamDataReceived):
             print(f"[server] Received data: {len(event.data)}")
             # Echo the data back to the sender
-            #self._quic.send_stream_data(event.stream_id, event.data, end_stream=True)
-            #self.transmit()
+            # self._quic.send_stream_data(event.stream_id, event.data, end_stream=True)
+            # self.transmit()
+
 
 # Start the server and listen for connections
 async def main():
-    config = QuicConfiguration(is_client=False, alpn_protocols=["hq-29"], congestion_control_algorithm="reno")
-    config.load_cert_chain(certfile="../tests/ssl_cert.pem", keyfile="../tests/ssl_key.pem")
+    config = QuicConfiguration(
+        is_client=False,
+        alpn_protocols=["hq-29"],
+        congestion_control_algorithm="periodic",
+    )
+    config.load_cert_chain(
+        certfile="../tests/ssl_cert.pem", keyfile="../tests/ssl_key.pem"
+    )
     port = 4433
     host = "localhost"
 
@@ -25,8 +33,10 @@ async def main():
 
     await asyncio.Future()
 
+
 if __name__ == "__main__":
     import asyncio
+
     try:
         asyncio.run(main())
     except KeyboardInterrupt:

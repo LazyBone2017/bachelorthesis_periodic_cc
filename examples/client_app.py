@@ -1,15 +1,17 @@
 import asyncio
 import csv
+import json
 import os
 from aioquic.asyncio import connect
 from aioquic.quic.configuration import QuicConfiguration
 from aioquic.quic.events import HandshakeCompleted
 from aioquic.asyncio import QuicConnectionProtocol
-from aioquic.quic.congestion.periodic import PKT_TRANSPORT_LOG
+from aioquic.quic.congestion.periodic import PACKET_LOG, PKT_TRANSPORT_LOG, LOG
 import tkinter as tk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.interpolate import make_splrep, splev
 
 
 class ClientProtocol(QuicConnectionProtocol):
@@ -28,9 +30,10 @@ class ClientProtocol(QuicConnectionProtocol):
 
 
 def save_to_csv(filename, data, fieldnames):
-    with open(filename, mode='w', newline='') as f:
+    with open(filename, mode="w", newline="") as f:
         writer = csv.writer(f)
         writer.writerows(data)
+
 
 def condense(log, period):
     cutoff = log[0][1] + period
@@ -38,18 +41,21 @@ def condense(log, period):
     pkt_count_s = 0
     pkt_count_a = 0
     n = 0
+    data_size = 0
     for i in log:
-        if(i[1] >= cutoff):
+        if i[1] >= cutoff:
             cutoff += period
-            rate_log.append([n, pkt_count_s, pkt_count_a, i[3]])
+            rate_log.append([n, pkt_count_s, pkt_count_a, i[3], data_size])
             n += 1
             pkt_count_a = 1
             pkt_count_s = 1
-        if(i[0] == "ACK"):
+            data_size = i[4]
+        if i[0] == "ACK":
             pkt_count_a += 1
-        else: pkt_count_s += 1
+        else:
+            pkt_count_s += 1
+            data_size += i[4]
     return rate_log
-
 
 
 class QuicClient:
@@ -57,15 +63,26 @@ class QuicClient:
         self.host = host
         self.port = port
         self.queue = queue
-        self.configuration = QuicConfiguration(is_client=True, alpn_protocols=["hq-29"], congestion_control_algorithm="periodic")  # QUIC with HTTP/3
-        self.configuration.verify_mode = False  # Disable certificate verification for testing
-        self.configuration.secrets_log_file=open("secrets.log", "a");
+        self.configuration = QuicConfiguration(
+            is_client=True,
+            alpn_protocols=["hq-29"],
+            congestion_control_algorithm="periodic",
+        )  # QUIC with HTTP/3
+        self.configuration.verify_mode = (
+            False  # Disable certificate verification for testing
+        )
+        self.configuration.secrets_log_file = open("secrets.log", "a")
 
     async def run(self):
         # Establish the QUIC connection
-        async with connect(self.host, self.port, configuration=self.configuration, create_protocol=ClientProtocol) as connection:
+        async with connect(
+            self.host,
+            self.port,
+            configuration=self.configuration,
+            create_protocol=ClientProtocol,
+        ) as connection:
             print("[client] Connected to server.")
-            
+
             # Send data from the queue to the server
             while True:
 
@@ -73,8 +90,10 @@ class QuicClient:
                 if data is None:
                     print("[client] Provider stopped data stream, closing stream.")
                     # Gracefully disconnect when no more data is available
-                    connection._quic.send_stream_data(0, b'', end_stream=True)  # Close the stream
-                    connection.transmit();
+                    connection._quic.send_stream_data(
+                        0, b"", end_stream=True
+                    )  # Close the stream
+                    connection.transmit()
                     break  # Exit the loop after sending the disconnect signal
                 await connection.send_data(data)
                 await asyncio.sleep(0)  # Let the event loop process other tasks
@@ -84,54 +103,76 @@ class QuicClient:
             connection.close()
             await connection.wait_closed()
             rate_log = condense(PKT_TRANSPORT_LOG, 0.1)
-            save_to_csv("packet_rate.csv", rate_log, ["TYPE", "PACKET_NUM", "TIME"])
-            save_to_csv("packet_log.csv", PKT_TRANSPORT_LOG, ["TYPE", "PACKET_NUM", "TIME"])
+            """save_to_csv("packet_rate.csv", rate_log, ["TYPE", "PACKET_NUM", "TIME"])
+            save_to_csv(
+                "packet_log.csv", PKT_TRANSPORT_LOG, ["TYPE", "PACKET_NUM", "TIME"]
+            )"""
+            # save_to_csv("winlog.csv", LOG, ["TYPE", "TIME", "WIN"])
             plot_graph(rate_log)
             print("Client Shutdown.")
+
 
 async def main():
     queue = asyncio.Queue()
 
     # Simulating a provider feeding data to the queue
     async def provider(queue, data_rate=1):
-        chunk_size = data_rate * 1024 * 1024  #[data_rate] MB in bytes
+        chunk_size = data_rate * 1024 * 1024  # [data_rate] MB in bytes
         counter = 0
 
         while True:
             # Generate [data_rate] MB of dummy data (you can replace this with real data)
-            data = f"Data {counter}".ljust(chunk_size, 'X')  # Create a string of size 2 MB
+            data = f"Data {counter}".ljust(
+                chunk_size, "X"
+            )  # Create a string of size 2 MB
             await queue.put(data)
             print(f"[provider] Pushed: Data {counter} ({len(data)} bytes)")
 
             counter += 1
-            if(counter >= 30): break
+            if counter >= 10:
+                break
             await asyncio.sleep(1)  # Sleep for 1 second to maintain the rate of 2 MB/s
 
         # Signal that the provider is done when it finishes
         await queue.put(None)
 
-    
-
     # Start the client and provider tasks
-    client = QuicClient('localhost', 4433, queue) 
+    client = QuicClient("localhost", 4433, queue)
     provider_task = asyncio.create_task(provider(queue, data_rate=1))
-    
+
     client_task = asyncio.create_task(client.run())
 
     # Wait for both tasks to finish
-    await asyncio.gather( provider_task, client_task)
+    await asyncio.gather(provider_task, client_task)
 
 
 def plot_graph(data):
-    x = [v[0] for v in data]
-    y = [v[1] for v in data]
-    z = [v[2] for v in data]
-    c = [v[3] / 1000 for v in data]
+
+    timestamps = np.array([v[0] for v in LOG])
+    congwin = [v[1] for v in LOG]
+    in_flight = np.array([v[2] for v in LOG])
+    ack_sizes = [v[3] for v in LOG]
+
+    spline_params = make_splrep(timestamps, in_flight, s=5)
+    print("Spline built")
+    timestamps_precise = np.linspace(timestamps.min(), timestamps.max(), 100)
+    smoothed = splev(
+        timestamps_precise,
+        spline_params,
+    )
+
+    delta = []
+    i = 0
+    while i < len(timestamps):
+        delta.append(abs(congwin[i] - in_flight[i]))
+        i += 1
 
     fig, ax = plt.subplots()
-    ax.plot(x, y)
-    ax.plot(x, z)
-    ax.plot(x, c)
+
+    ax.plot(timestamps, congwin, color="red")
+    # ax.plot(timestamps, in_flight, color="green")
+    ax.plot(timestamps_precise, smoothed)
+    ax.plot(timestamps, delta)
     ax.set_title("Sine Wave")
 
     ax.set_title("Graph from Points")
@@ -150,10 +191,10 @@ def plot_graph(data):
         window.destroy()
         window.quit()
 
-    
     window.protocol("WM_DELETE_WINDOW", on_closing)
 
     window.mainloop()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
