@@ -14,7 +14,6 @@ class EchoProtocol(QuicConnectionProtocol):
             # self.transmit()
 
 
-# Start the server and listen for connections
 async def main():
     config = QuicConfiguration(
         is_client=False,
@@ -28,7 +27,6 @@ async def main():
     host = "localhost"
 
     print(f"[server] Running on {host}:{port}")
-    # Listen for incoming QUIC connections on port 4433
     server = await serve(host, port, configuration=config, create_protocol=EchoProtocol)
 
     await asyncio.Future()

@@ -15,7 +15,6 @@ from .base import (
 )
 
 K_LOSS_REDUCTION_FACTOR = 0.5
-PKT_TRANSPORT_LOG = []
 
 LOG = []
 ACK_BYTES_SUM = 0
@@ -34,19 +33,26 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._congestion_stash = 0
         self._rtt_monitor = QuicRttMonitor()
         self._start_time = time.monotonic()
-        self._base_cwnd = 5000  # baseline in bytes
-        self._amplitude = 4000  # how much the window fluctuates
-        self._frequency = 0.1  # how fast it oscillates (in Hz)
+        self._base_cwnd = 100000  # baseline in bytes
+        self._amplitude = 10000  # how much the window fluctuates
+        self._frequency = 1  # how fast it oscillates (in Hz)
         asyncio.create_task(self.modulate_congestion_window())
 
     async def modulate_congestion_window(self):
         while True:
             delta_t = time.monotonic() - self._start_time
-            self.congestion_window = int(
+            new_conw = int(
                 self._base_cwnd
                 + self._amplitude * math.sin(2 * math.pi * self._frequency * delta_t)
             )
 
+            # increase base rate on every upturn for testing
+            """if self.congestion_window < self._base_cwnd and new_conw > self._base_cwnd:
+                self._base_cwnd += 300"""
+
+            self._base_cwnd += 5
+
+            self.congestion_window = new_conw
             global ACK_BYTES_SUM
             LOG.append(
                 [delta_t, self.congestion_window, self.bytes_in_flight, ACK_BYTES_SUM]
@@ -59,18 +65,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
             # increase base_cwnd in order to simulate congestion
             # self._base_cwnd += 100 #works shitty
 
-    """def _update_congestion_window(self) -> None:
-        # Get elapsed time for sine wave modulation
-        elapsed_time = time.time() - self._start_time
-        # Apply sine wave to base congestion window
-        sine_factor = math.sin(2 * math.pi * self._frequency * elapsed_time)
-        self.congestion_window = int(self._base_cwnd + self._amplitude * sine_factor)
-        # self.congestion_window = 5000
-        LOG.append(["WINDOW", time.time(), self.congestion_window, self.bytes_in_flight])"""
-
     def on_packet_acked(self, *, now: float, packet: QuicSentPacket) -> None:
-        # PKT_TRANSPORT_LOG.append(["ACK", time.time(), packet.packet_number, self.congestion_window, packet.sent_bytes])
-        # self._update_congestion_window()  # Update window size
         self.bytes_in_flight -= packet.sent_bytes
         global ACK_BYTES_SUM
         ACK_BYTES_SUM += packet.sent_bytes
@@ -90,16 +85,6 @@ class PeriodicCongestionControl(QuicCongestionControl):
 
     def on_packet_sent(self, *, packet: QuicSentPacket) -> None:
         self.bytes_in_flight += packet.sent_bytes
-        PKT_TRANSPORT_LOG.append(
-            [
-                "SENT",
-                time.time(),
-                packet.packet_number,
-                self.congestion_window,
-                self.bytes_in_flight,
-            ]
-        )
-        # LOG.append(["SENT", time.time(), self.congestion_window])
 
     def on_packets_expired(self, *, packets: Iterable[QuicSentPacket]) -> None:
         print("Expired")
@@ -120,8 +105,6 @@ class PeriodicCongestionControl(QuicCongestionControl):
                K_MINIMUM_WINDOW * self._max_datagram_size,
            )
             self.ssthresh = self.congestion_window"""
-
-        # self._update_congestion_window()  # Modulate window after loss event
 
     def on_rtt_measurement(self, *, now: float, rtt: float) -> None:
         # check whether we should exit slow start
