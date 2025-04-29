@@ -32,6 +32,9 @@ async def main():
 
 
 def plot_graph():
+
+    save_to_csv("LOG.csv", LOG, ["T", "T", "T", "T"])
+
     should_build_spline = False
     timestamps = np.array([v[0] for v in LOG])
     congwin = [v[1] for v in LOG]
@@ -45,11 +48,12 @@ def plot_graph():
             timestamps_precise,
             spline_params,
         )
-
+    rtt = [v[3] for v in LOG]
     fig, ax = plt.subplots()
 
     ax.plot(timestamps, congwin, color="red")
     ax.plot(timestamps, in_flight, color="green")
+    ax.plot(timestamps, rtt, color="yellow")
     if should_build_spline:
         ax.plot(timestamps_precise, smoothed, color="orange", label="Smoothed")
     ax.set_title("Sine Wave")

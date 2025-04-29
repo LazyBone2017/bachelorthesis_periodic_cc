@@ -36,6 +36,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._base_cwnd = 100000  # baseline in bytes
         self._amplitude = 10000  # how much the window fluctuates
         self._frequency = 1  # how fast it oscillates (in Hz)
+        self.latest_rtt = 0
         asyncio.create_task(self.modulate_congestion_window())
 
     async def modulate_congestion_window(self):
@@ -50,12 +51,17 @@ class PeriodicCongestionControl(QuicCongestionControl):
             """if self.congestion_window < self._base_cwnd and new_conw > self._base_cwnd:
                 self._base_cwnd += 300"""
 
-            self._base_cwnd += 5
+            self._base_cwnd += 20
 
             self.congestion_window = new_conw
             global ACK_BYTES_SUM
             LOG.append(
-                [delta_t, self.congestion_window, self.bytes_in_flight, ACK_BYTES_SUM]
+                [
+                    delta_t,
+                    self.congestion_window,
+                    self.bytes_in_flight,
+                    self.latest_rtt * 10000,
+                ]
             )
             ACK_BYTES_SUM = 0
 
@@ -108,6 +114,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
 
     def on_rtt_measurement(self, *, now: float, rtt: float) -> None:
         # check whether we should exit slow start
+        self.latest_rtt = rtt
         return
         if self.ssthresh is None and self._rtt_monitor.is_rtt_increasing(
             now=now, rtt=rtt
