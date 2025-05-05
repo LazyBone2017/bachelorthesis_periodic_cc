@@ -24,7 +24,7 @@ async def main():
     # Start the client and provider tasks
     client = QuicClient("localhost", 4433, queue)
 
-    provider_task = asyncio.create_task(provider(queue, data_rate=1, iterations=50))
+    provider_task = asyncio.create_task(provider(queue, data_rate=1, iterations=100))
     client_task = asyncio.create_task(client.run(plot_graph))
 
     # Wait for both tasks to finish
@@ -32,6 +32,9 @@ async def main():
 
 
 def plot_graph():
+    plt.ioff()
+    # plt.show()
+    return
 
     save_to_csv("LOG.csv", LOG, ["T", "T", "T", "T"])
 
@@ -49,6 +52,34 @@ def plot_graph():
             spline_params,
         )
     rtt = [v[3] for v in LOG]
+    in_flight = congwin
+    in_flight_mean_reduced = in_flight - np.mean(in_flight)
+
+    time = np.linspace(0, 10, 1000)
+    signal = np.sin(2 * np.pi * 1 * time) + 0.5  # 1Hz signal + DC offset
+
+    dt = np.diff(timestamps)
+    print("Mean interval:", np.mean(dt))
+    print("Standard deviation:", np.std(dt))
+
+    signal_demeaned = signal - np.mean(signal)
+
+    # 2. Perform FFT
+    fft_result = np.fft.fft(signal_demeaned)
+
+    # 3. Get frequencies
+    freqs = np.fft.fftfreq(len(signal_demeaned), d=(time[1] - time[0]))
+
+    # 4. Plot positive frequencies
+    mask = freqs > 0
+    plt.plot(freqs[mask], np.abs(fft_result)[mask])
+    plt.title("Frequency domain after mean removal")
+    plt.xlabel("Frequency (Hz)")
+    plt.ylabel("Amplitude")
+    plt.xlim(0, 5)  # optional: zoom into 0-5 Hz
+    plt.grid()
+    plt.show()
+
     fig, ax = plt.subplots()
 
     ax.plot(timestamps, congwin, color="red")

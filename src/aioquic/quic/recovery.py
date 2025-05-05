@@ -93,6 +93,7 @@ class QuicPacketRecovery:
         send_probe: Callable[[], None],
         logger: Optional[logging.LoggerAdapter] = None,
         quic_logger: Optional[QuicLoggerTrace] = None,
+        is_client=False,
     ) -> None:
         self.max_ack_delay = 0.025
         self.peer_completed_address_validation = peer_completed_address_validation
@@ -115,7 +116,9 @@ class QuicPacketRecovery:
 
         # congestion control
         self._cc = create_congestion_control(
-            congestion_control_algorithm, max_datagram_size=max_datagram_size
+            congestion_control_algorithm,
+            max_datagram_size=max_datagram_size,
+            is_client=is_client,
         )
         self._pacer = QuicPacketPacer(max_datagram_size=max_datagram_size)
 
