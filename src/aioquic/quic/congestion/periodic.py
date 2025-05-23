@@ -42,13 +42,12 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._start_time = time.monotonic()
         self._base_cwnd = 100000  # baseline in bytes
         self._amplitude = 10000  # how much the window fluctuates
-        self._frequency = 1  # how fast it oscillates (in Hz)
+        self._frequency = 0.1  # how fast it oscillates (in Hz)
         self.latest_rtt = 0
         self.is_client = is_client
         if is_client:
             self.modulation_analyzer = ModulationAnalyzer(
-                queue_size=50,
-                scanning_granularity=0.001,  # scans per Hz of mod freq
+                snapshot_fraction=0.01,  # scan fraction of period
                 modulation_frequency=self._frequency,
             )
 
@@ -64,14 +63,14 @@ class PeriodicCongestionControl(QuicCongestionControl):
 
             self.congestion_window = new_conw
 
-            self.modulation_analyzer.update_ui(
-                self.congestion_window, self.bytes_in_flight
+            self.modulation_analyzer.update_samples(
+                self.congestion_window, self.bytes_in_flight, delta_t
             )
             if self.is_client:
                 self._frequency = self.modulation_analyzer.modulation_frequency
 
             # set update frequency, inv. proportional to modulation frequency
-            await asyncio.sleep(self.modulation_analyzer.scanning_rate)
+            await asyncio.sleep(self.modulation_analyzer.scanning_interval)
 
     def on_packet_acked(self, *, now: float, packet: QuicSentPacket) -> None:
         self.bytes_in_flight -= packet.sent_bytes

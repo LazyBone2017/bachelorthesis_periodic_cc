@@ -1,5 +1,8 @@
 import asyncio
 import csv
+import threading
+
+import nicegui
 
 from QuicClient import QuicClient
 from aioquic.quic.congestion.periodic import LOG
@@ -8,8 +11,17 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.interpolate import make_splrep, splev
+from nicegui import ui
 
 from data_provider import provider
+
+label = None
+
+
+def handle_ui():
+    global label
+    label = ui.label("Ts")
+    nicegui.ui.run()
 
 
 def save_to_csv(filename, data, fieldnames):
@@ -19,21 +31,24 @@ def save_to_csv(filename, data, fieldnames):
 
 
 async def main():
-    queue = asyncio.Queue()
+    send_data_queue = asyncio.Queue()
 
     # Start the client and provider tasks
-    client = QuicClient("localhost", 4433, queue)
+    client = QuicClient("localhost", 4433, send_data_queue)
 
-    provider_task = asyncio.create_task(provider(queue, data_rate=1, iterations=100))
-    client_task = asyncio.create_task(client.run(plot_graph))
-
+    provider_task = asyncio.create_task(
+        provider(send_data_queue, data_rate=1, iterations=10)
+    )
+    # client_task = asyncio.create_task(client.run(plot_graph))
+    thread = threading.Thread(
+        target=client.run(on_connection_close_callback=plot_graph()), daemon=True
+    )
+    await thread.run()
     # Wait for both tasks to finish
-    await asyncio.gather(provider_task, client_task)
+    await asyncio.gather(provider_task)
 
 
 def plot_graph():
-    plt.ioff()
-    # plt.show()
     return
 
     save_to_csv("LOG.csv", LOG, ["T", "T", "T", "T"])
@@ -110,5 +125,6 @@ def plot_graph():
     window.mainloop()
 
 
-if __name__ == "__main__":
+if __name__ in {"__main__", "__mp_main__"}:
+    handle_ui()
     asyncio.run(main())
