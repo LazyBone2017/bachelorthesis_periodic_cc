@@ -15,19 +15,7 @@ from nicegui import ui
 
 from data_provider import provider
 
-label = None
 
-
-def handle_ui():
-    global label
-    label = ui.label("Ts")
-    nicegui.ui.run()
-
-
-def save_to_csv(filename, data, fieldnames):
-    with open(filename, mode="w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerows(data)
 
 
 async def main():
@@ -37,15 +25,15 @@ async def main():
     client = QuicClient("localhost", 4433, send_data_queue)
 
     provider_task = asyncio.create_task(
-        provider(send_data_queue, data_rate=1, iterations=10)
+        provider(send_data_queue, data_rate=1, iterations=1000)
     )
-    # client_task = asyncio.create_task(client.run(plot_graph))
-    thread = threading.Thread(
+    client_task = asyncio.create_task(client.run(plot_graph))
+    """thread = threading.Thread(
         target=client.run(on_connection_close_callback=plot_graph()), daemon=True
     )
-    await thread.run()
+    await thread.run()"""
     # Wait for both tasks to finish
-    await asyncio.gather(provider_task)
+    await asyncio.gather(provider_task, client_task)
 
 
 def plot_graph():
@@ -126,5 +114,4 @@ def plot_graph():
 
 
 if __name__ in {"__main__", "__mp_main__"}:
-    handle_ui()
     asyncio.run(main())

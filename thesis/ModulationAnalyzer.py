@@ -1,47 +1,61 @@
 import asyncio
 from collections import deque
+import os
 import time
 
 from matplotlib import pyplot as plt
 from matplotlib.widgets import TextBox
 import numpy as np
 
+import scipy
 from scipy.signal import find_peaks
 
 from diagnostics import DiagnosticsMonitor
 
 
 class ModulationAnalyzer:
-    def __init__(self, snapshot_fraction, modulation_frequency):
-        self.timestamp_queue = deque(maxlen=int(1 / snapshot_fraction))
-
+    def __init__(self, modulation_frequency):
+        self.timestamp_queue = deque(maxlen=1000)
+        # self.timestamp_queue.append(([], [], []))
         self.modulation_frequency = modulation_frequency
-        self.scanning_interval = snapshot_fraction / modulation_frequency
-        self.diagnostics_monitor = DiagnosticsMonitor(self)
+        self.diagnostics_monitor = DiagnosticsMonitor()
+        self.last_peak_freq = None
 
+    # pushes data into the queue
     def update_samples(self, u_congwin, u_in_flight, delta_t):
-        if len(self.timestamp_queue) > 0:
-            print(len(self.timestamp_queue))
-            print(
-                -self.timestamp_queue[0][0]
-                + self.timestamp_queue[len(self.timestamp_queue) - 1][0]
+        self.timestamp_queue.append((u_congwin, u_in_flight, delta_t))
+        fft = None
+        peak_freq = None
+        if len(self.timestamp_queue) > 1:
+            congwin, in_flight, timestamps = zip(*self.timestamp_queue)
+
+            timestamps_uniform = np.arange(timestamps[0], timestamps[-1], 0.1)
+            interpolated_fn = scipy.interpolate.interp1d(
+                timestamps, in_flight, kind="linear", fill_value="extrapolate"
             )
-        self.timestamp_queue.append(
-            (delta_t, u_congwin, u_in_flight)
-        )  # append new timestamp
+            in_flight_uniform = interpolated_fn(timestamps_uniform)
 
-        timestamps, congwin, in_flight = zip(*self.timestamp_queue)  # unpack
-        if len(timestamps) > 1:
-            fft = np.fft.fft(in_flight - np.mean(in_flight))
-            freqs = np.fft.fftfreq(
-                len(in_flight - np.mean(in_flight)),
-                d=(timestamps[1] - timestamps[0]),
-            )  # fft frequency distribution
+            signal = in_flight_uniform - np.mean(in_flight_uniform)
+            window = np.hanning(len(signal))
+            signal_windowed = signal * window
+            fft = np.fft.rfft(signal_windowed)
+            freqs = np.fft.rfftfreq(len(signal_windowed), d=0.1)
+            fft_magnitude = np.abs(fft)
 
-        self.diagnostics_monitor.diagnostics_queue.append(
-            (delta_t, u_congwin, u_in_flight)
+            peak_index = np.argmax(fft_magnitude)
+            peak_freq = freqs[peak_index]
+            alpha = 0.2  # smoothing factor
+            if self.last_peak_freq is not None:
+                peak_freq = alpha * peak_freq + (1 - alpha) * self.last_peak_freq
+            self.last_peak_freq = peak_freq
+
+        self.diagnostics_monitor.queue.append(
+            (delta_t, u_congwin, u_in_flight, self.last_peak_freq)
         )
-        print(len(self.diagnostics_monitor.diagnostics_queue))
+
+        self.diagnostics_monitor.output_queue.append(
+            (delta_t, u_congwin, u_in_flight, self.last_peak_freq)
+        )
 
     def last_maximum(self):
         # hard coded sample size, last n entries of self.timestamp_queue[2], based on self.modulation_frequency@1Hz, self.scanning_granurality@0.001
