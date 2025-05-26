@@ -16,8 +16,6 @@ from nicegui import ui
 from data_provider import provider
 
 
-
-
 async def main():
     send_data_queue = asyncio.Queue()
 
@@ -25,7 +23,7 @@ async def main():
     client = QuicClient("localhost", 4433, send_data_queue)
 
     provider_task = asyncio.create_task(
-        provider(send_data_queue, data_rate=1, iterations=1000)
+        provider(send_data_queue, data_rate=1, iterations=10000)
     )
     client_task = asyncio.create_task(client.run(plot_graph))
     """thread = threading.Thread(

@@ -15,13 +15,20 @@ from diagnostics import DiagnosticsMonitor
 
 class ModulationAnalyzer:
     def __init__(self, modulation_frequency):
-        self.timestamp_queue = deque(maxlen=1000)
         # self.timestamp_queue.append(([], [], []))
         self.modulation_frequency = modulation_frequency
+        self.timestamp_queue = deque(maxlen=self.calculate_queue_size())
+
         self.diagnostics_monitor = DiagnosticsMonitor()
         self.last_peak_freq = None
 
     # pushes data into the queue
+
+    def calculate_queue_size(self):
+        return int(
+            (10 / self.modulation_frequency) * (1 / 0.1)
+        )  # given 0.1 is the timestamp interval
+
     def update_samples(self, u_congwin, u_in_flight, delta_t):
         self.timestamp_queue.append((u_congwin, u_in_flight, delta_t))
         fft = None
