@@ -24,7 +24,7 @@ async def main():
         certfile="../tests/ssl_cert.pem", keyfile="../tests/ssl_key.pem"
     )
     port = 4433
-    host = "localhost"
+    host = "10.0.0.2"
 
     print(f"[server] Running on {host}:{port}")
     server = await serve(host, port, configuration=config, create_protocol=EchoProtocol)
