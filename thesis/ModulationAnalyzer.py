@@ -4,6 +4,7 @@ import os
 import time
 
 from matplotlib import pyplot as plt
+from matplotlib.mlab import detrend
 from matplotlib.widgets import TextBox
 import numpy as np
 
@@ -26,7 +27,7 @@ class ModulationAnalyzer:
 
     def calculate_queue_size(self):
         return int(
-            (10 / self.modulation_frequency) * (1 / 0.1)
+            (3 / self.modulation_frequency) * (1 / 0.1)
         )  # given 0.1 is the timestamp interval
 
     def update_samples(self, u_congwin, u_in_flight, delta_t):
@@ -43,6 +44,10 @@ class ModulationAnalyzer:
             in_flight_uniform = interpolated_fn(timestamps_uniform)
 
             signal = in_flight_uniform - np.mean(in_flight_uniform)
+            signal = detrend(
+                signal, "linear", axis=0
+            )  # important, has to be connected to linear increase mode
+
             window = np.hanning(len(signal))
             signal_windowed = signal * window
             fft = np.fft.rfft(signal_windowed)

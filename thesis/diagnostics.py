@@ -4,6 +4,7 @@ import csv
 import threading
 import time
 from matplotlib import pyplot as plt
+from matplotlib.mlab import detrend
 from matplotlib.widgets import TextBox
 import matplotlib
 from nicegui import ui
@@ -48,12 +49,19 @@ class DiagnosticsMonitor:
             [], [], "g-"
         )  # green line for congwin
 
+        (self.line_amplitude_congwin_detrended,) = self.ax_time.plot(
+            [], [], "b-"
+        )  # green line for congwin
+        (self.line_amplitude_trend,) = self.ax_time.plot(
+            [], [], "o-"
+        )  # green line for congwin
+
         # frequency graph
         (self.line_freq,) = self.ax_freq.plot([], [], "b-")
 
         (self.line_freq_rolling,) = self.ax_freq_rolling.plot([], [], "o-")
 
-        self.ax_time.set_ylim(90000, 110000)
+        # self.ax_time.set_ylim(90000, 110000)
 
         plt.ion()
         asyncio.create_task(self.update_ui())
@@ -70,8 +78,10 @@ class DiagnosticsMonitor:
                     timestamps, congwin, in_flight, peak_freq = zip(*self.queue)
                     self.line_amplitude_in_flight.set_xdata(timestamps)  # set data
                     self.line_amplitude_in_flight.set_ydata(in_flight)  # set data
+
                     self.line_amplitude_congwin.set_xdata(timestamps)  # set data
                     self.line_amplitude_congwin.set_ydata(congwin)  # set data
+
                     self.ax_time.relim()
                     self.ax_time.autoscale_view()
                     """
