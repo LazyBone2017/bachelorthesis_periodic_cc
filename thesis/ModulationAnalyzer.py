@@ -27,13 +27,15 @@ class ModulationAnalyzer:
 
     def calculate_queue_size(self):
         return int(
-            (3 / self.modulation_frequency) * (1 / 0.1)
+            (10 / self.modulation_frequency) * (1 / 0.1)
         )  # given 0.1 is the timestamp interval
 
-    def update_samples(self, u_congwin, u_in_flight, delta_t):
+    def update_samples(self, u_congwin, u_in_flight, delta_t, latest_rtt):
         self.timestamp_queue.append((u_congwin, u_in_flight, delta_t))
         fft = None
         peak_freq = None
+        freqs = None
+        fft_magnitude = None
         if len(self.timestamp_queue) > 1:
             congwin, in_flight, timestamps = zip(*self.timestamp_queue)
 
@@ -62,11 +64,19 @@ class ModulationAnalyzer:
             self.last_peak_freq = peak_freq
 
         self.diagnostics_monitor.queue.append(
-            (delta_t, u_congwin, u_in_flight, self.last_peak_freq)
+            (
+                delta_t,
+                u_congwin,
+                u_in_flight,
+                self.last_peak_freq,
+                latest_rtt,
+                fft_magnitude,
+                freqs,
+            )
         )
 
         self.diagnostics_monitor.output_queue.append(
-            (delta_t, u_congwin, u_in_flight, self.last_peak_freq)
+            (delta_t, u_congwin, u_in_flight, self.last_peak_freq, latest_rtt)
         )
 
     def last_maximum(self):

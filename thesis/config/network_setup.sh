@@ -38,6 +38,8 @@ function setup() {
 
     echo "[+] Applying traffic control: delay=$DELAY, loss=$LOSS, rate=$RATE"
     ip netns exec $NS1 tc qdisc add dev $VETH1 root netem delay $DELAY loss $LOSS rate $RATE
+    ip netns exec $NS2 tc qdisc add dev $VETH2 root netem delay $DELAY loss $LOSS rate $RATE
+
 
     echo ""
     echo "[✓] Setup complete"

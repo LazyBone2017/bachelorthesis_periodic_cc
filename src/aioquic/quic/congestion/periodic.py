@@ -40,11 +40,13 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._congestion_stash = 0
         self._rtt_monitor = QuicRttMonitor()
         self._start_time = time.monotonic()
-        self._base_cwnd = 100000  # baseline in bytes
+        self._base_cwnd = 50000  # baseline in bytes
+        # self.congestion_window = 100000
         self._amplitude = 10000  # how much the window fluctuates
         self._frequency = 0.1  # how fast it oscillates (in Hz)
         self.latest_rtt = 0
         self.sampling_interval = 0.1
+        self.acked_bytes_in_interval = 0
 
         self.is_client = is_client
         if is_client:
@@ -55,6 +57,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
         asyncio.create_task(self.modulate_congestion_window())
 
     async def modulate_congestion_window(self):
+        counter = 0
         while True:
             delta_t = time.monotonic() - self._start_time
             new_conw = int(
@@ -64,11 +67,20 @@ class PeriodicCongestionControl(QuicCongestionControl):
             )
 
             self.congestion_window = new_conw
+            if counter == 400:
+                self.congestion_window = 50000
+            if counter == 200:
+                self.congestion_window = 300000
+            # counter += 1
 
             if self.is_client:
                 self.modulation_analyzer.update_samples(
-                    self.congestion_window, self.bytes_in_flight, delta_t
+                    self.congestion_window,
+                    self.acked_bytes_in_interval,
+                    delta_t,
+                    self.latest_rtt,
                 )
+                self.acked_bytes_in_interval = 0
                 self._frequency = self.modulation_analyzer.modulation_frequency
 
             # set update frequency, inv. proportional to modulation frequency
@@ -76,8 +88,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
 
     def on_packet_acked(self, *, now: float, packet: QuicSentPacket) -> None:
         self.bytes_in_flight -= packet.sent_bytes
-        global ACK_BYTES_SUM
-        ACK_BYTES_SUM += packet.sent_bytes
+        self.acked_bytes_in_interval += packet.sent_bytes * (0.2 / 0.1)
         """if packet.sent_time <= self._congestion_recovery_start_time:
             return
 

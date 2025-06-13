@@ -1,6 +1,7 @@
 import asyncio
 from collections import deque
 import csv
+import os
 import threading
 import time
 from matplotlib import pyplot as plt
@@ -13,6 +14,7 @@ import scipy
 
 
 def save_to_csv(filename, data):
+    print("CWD:", os.getcwd())
     with open(filename + ".csv", mode="w", newline="") as f:
         writer = csv.writer(f)
         writer.writerows(data)
@@ -28,10 +30,20 @@ class DiagnosticsMonitor:
         self.output_queue = deque()
         self.UI_enabled = True
 
+    def piecewise_constant_interpolation(self, timestamps, values, uniform_t):
+        result = np.zeros_like(uniform_t)
+        idx = 0
+        for i, t in enumerate(uniform_t):
+            # Move idx forward while next timestamp <= t
+            while idx + 1 < len(timestamps) and timestamps[idx + 1] <= t:
+                idx += 1
+            result[i] = values[idx]
+        return result
+
     def init_ui(self):
         # amplitude chart, frequency chart
-        fig, (self.ax_time, self.ax_freq, self.ax_freq_rolling) = plt.subplots(
-            1, 3, figsize=(10, 4)
+        fig, (self.ax_time, self.ax_rtt, self.ax_freq_rolling, self.ax_freq) = (
+            plt.subplots(1, 4, figsize=(10, 4))
         )  # 1 row, 2 columns
         """self.timestamp_queue.append(
             DiagnosticsMonitor(
@@ -57,6 +69,8 @@ class DiagnosticsMonitor:
         )  # green line for congwin
 
         # frequency graph
+        (self.line_rtt,) = self.ax_rtt.plot([], [], "b-")
+
         (self.line_freq,) = self.ax_freq.plot([], [], "b-")
 
         (self.line_freq_rolling,) = self.ax_freq_rolling.plot([], [], "o-")
@@ -69,13 +83,21 @@ class DiagnosticsMonitor:
     async def update_ui(self):
         while True:
             if len(self.queue) > 0:
-                if len(self.output_queue) == 500:
-                    save_to_csv("data", self.output_queue)
+                if len(self.output_queue) == 700:
+                    save_to_csv("../data_out/data", self.output_queue)
                 if len(self.output_queue) % 100 == 0:
                     print("Output queue len: " + str(len(self.output_queue)))
                 if self.UI_enabled:
 
-                    timestamps, congwin, in_flight, peak_freq = zip(*self.queue)
+                    (
+                        timestamps,
+                        congwin,
+                        in_flight,
+                        peak_freq,
+                        latest_rtt,
+                        magnitudes,
+                        freqs,
+                    ) = zip(*self.queue)
                     self.line_amplitude_in_flight.set_xdata(timestamps)  # set data
                     self.line_amplitude_in_flight.set_ydata(in_flight)  # set data
 
@@ -84,32 +106,69 @@ class DiagnosticsMonitor:
 
                     self.ax_time.relim()
                     self.ax_time.autoscale_view()
-                    """
-                    if len(timestamps) > 1:
-                        timestamps_uniform = np.arange(timestamps[0], timestamps[-1], 0.1)
-                        interpolated_fn = scipy.interpolate.interp1d(
-                            timestamps, congwin, kind="linear", fill_value="extrapolate"
-                        )
-                        congwin_uniform = interpolated_fn(timestamps_uniform)
-                        signal = congwin_uniform  # - np.mean(congwin_uniform)
-                        fft = np.fft.fft(signal)
-                        fft_magnitude = np.abs(fft)
-                        freqs = np.fft.fftfreq(
-                            len(congwin_uniform - np.mean(congwin_uniform)),
-                            d=0.1,
-                        )  # fft frequency distribution
 
+                    if len(timestamps) > 1 and False:
+                        timestamps_uniform = np.arange(
+                            timestamps[0], timestamps[-1], 0.1
+                        )
+
+                        interp_values = self.piecewise_constant_interpolation(
+                            timestamps, in_flight, timestamps_uniform
+                        )
+
+                        in_flight_uniform = interp_values
+
+                        signal = in_flight_uniform - np.mean(in_flight_uniform)
+                        signal = detrend(
+                            signal, "linear", axis=0
+                        )  # important, has to be connected to linear increase mode
+
+                        window = np.hanning(len(signal))
+                        signal_windowed = signal * window
+                        fft = np.fft.rfft(signal_windowed)
+                        freqs = np.fft.rfftfreq(len(signal_windowed), d=0.1)
                         # maybe replace with normal conditional
                         self.line_freq.set_xdata(freqs[freqs > 0])
                         self.line_freq.set_ydata(np.abs(fft[freqs > 0]))
                         self.ax_freq.relim()
                         # self.ax_freq.set_xlim(left=0)
-                        self.ax_freq.autoscale_view()"""
+                        self.ax_freq.autoscale_view()
+
+                    """strongest_indices = np.argsort(magnitudes)[-5:]
+
+                    # Sort them by strength descending
+                    strongest_indices = strongest_indices[
+                        np.argsort(magnitudes[strongest_indices])[::-1]
+                    ]
+
+                    # Extract frequencies and their magnitudes
+                    strongest_freqs = freqs[strongest_indices]
+                    strongest_mags = magnitudes[strongest_indices]
+                    """
+
+                    print(freqs[-1])
+                    if freqs[-1] is not None:
+
+                        freqs = np.array(freqs[-1])
+                        print("-----------")
+                        print(freqs)
+                        print("-----------")
+
+                        self.line_freq.set_xdata(freqs[freqs > 0])
+                        self.line_freq.set_ydata(magnitudes)
+                        self.ax_freq.relim()
+                        # self.ax_freq.set_xlim(left=0)
+                        self.ax_freq.autoscale_view()
 
                     self.line_freq_rolling.set_xdata(timestamps)
                     self.line_freq_rolling.set_ydata(peak_freq)
                     self.ax_freq_rolling.relim()
                     self.ax_freq_rolling.autoscale_view()
+
+                    self.line_rtt.set_xdata(timestamps)
+                    self.line_rtt.set_ydata(latest_rtt)
+                    self.ax_rtt.relim()
+                    self.ax_rtt.autoscale_view()
 
                     plt.show()
                     plt.pause(0.01)
