@@ -10,6 +10,7 @@ from typing import Any, Dict, Iterable
 from matplotlib import pyplot as plt
 from matplotlib.widgets import TextBox
 import numpy as np
+import zmq
 
 from ModulationAnalyzer import ModulationAnalyzer
 
@@ -54,6 +55,9 @@ class PeriodicCongestionControl(QuicCongestionControl):
                 modulation_frequency=self._frequency,
             )
 
+        self.socket = zmq.Context().socket(zmq.PUSH)
+        self.socket.connect("tcp://127.0.0.1:5555")
+
         asyncio.create_task(self.modulate_congestion_window())
 
     async def modulate_congestion_window(self):
@@ -74,12 +78,21 @@ class PeriodicCongestionControl(QuicCongestionControl):
             # counter += 1
 
             if self.is_client:
-                self.modulation_analyzer.update_samples(
+                """self.modulation_analyzer.update_samples(
                     self.congestion_window,
                     self.acked_bytes_in_interval,
                     delta_t,
                     self.latest_rtt,
-                )
+                )"""
+
+                self.socket.send_json(
+                    (
+                        delta_t,
+                        self.congestion_window,
+                        self.acked_bytes_in_interval,
+                        self.latest_rtt,
+                    )
+                )  # Non-blocking send
                 self.acked_bytes_in_interval = 0
                 self._frequency = self.modulation_analyzer.modulation_frequency
 

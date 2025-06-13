@@ -16,12 +16,12 @@ from diagnostics import DiagnosticsMonitor
 
 class ModulationAnalyzer:
     def __init__(self, modulation_frequency):
-        # self.timestamp_queue.append(([], [], []))
         self.modulation_frequency = modulation_frequency
         self.timestamp_queue = deque(maxlen=self.calculate_queue_size())
 
-        self.diagnostics_monitor = DiagnosticsMonitor()
+        # self.diagnostics_monitor = DiagnosticsMonitor()
         self.last_peak_freq = None
+ # non-blocking connect
 
     # pushes data into the queue
 
@@ -74,6 +74,9 @@ class ModulationAnalyzer:
                 freqs,
             )
         )
+        self.socket.send_json(
+            (delta_t, u_congwin, u_in_flight, self.last_peak_freq, latest_rtt)
+        )  # Non-blocking send
 
         self.diagnostics_monitor.output_queue.append(
             (delta_t, u_congwin, u_in_flight, self.last_peak_freq, latest_rtt)

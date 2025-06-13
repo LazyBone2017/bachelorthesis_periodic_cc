@@ -28,7 +28,7 @@ class DiagnosticsMonitor:
         # matplotlib.interactive(True)
         self.counter = 0
         self.output_queue = deque()
-        self.UI_enabled = True
+        self.UI_enabled = False
 
     def piecewise_constant_interpolation(self, timestamps, values, uniform_t):
         result = np.zeros_like(uniform_t)
