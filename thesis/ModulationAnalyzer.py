@@ -21,7 +21,8 @@ class ModulationAnalyzer:
 
         # self.diagnostics_monitor = DiagnosticsMonitor()
         self.last_peak_freq = None
- # non-blocking connect
+
+    # non-blocking connect
 
     # pushes data into the queue
 
@@ -39,7 +40,7 @@ class ModulationAnalyzer:
         if len(self.timestamp_queue) > 1:
             congwin, in_flight, timestamps = zip(*self.timestamp_queue)
 
-            timestamps_uniform = np.arange(timestamps[0], timestamps[-1], 0.1)
+            """timestamps_uniform = np.arange(timestamps[0], timestamps[-1], 0.1)
             interpolated_fn = scipy.interpolate.interp1d(
                 timestamps, in_flight, kind="linear", fill_value="extrapolate"
             )
@@ -61,9 +62,9 @@ class ModulationAnalyzer:
             alpha = 0.2  # smoothing factor
             if self.last_peak_freq is not None:
                 peak_freq = alpha * peak_freq + (1 - alpha) * self.last_peak_freq
-            self.last_peak_freq = peak_freq
+            self.last_peak_freq = peak_freq"""
 
-        self.diagnostics_monitor.queue.append(
+        """self.diagnostics_monitor.queue.append(
             (
                 delta_t,
                 u_congwin,
@@ -73,14 +74,14 @@ class ModulationAnalyzer:
                 fft_magnitude,
                 freqs,
             )
-        )
-        self.socket.send_json(
+        )"""
+        '''self.socket.send_json(
             (delta_t, u_congwin, u_in_flight, self.last_peak_freq, latest_rtt)
         )  # Non-blocking send
-
-        self.diagnostics_monitor.output_queue.append(
+        '''
+        """self.diagnostics_monitor.output_queue.append(
             (delta_t, u_congwin, u_in_flight, self.last_peak_freq, latest_rtt)
-        )
+        )"""
 
     def last_maximum(self):
         # hard coded sample size, last n entries of self.timestamp_queue[2], based on self.modulation_frequency@1Hz, self.scanning_granurality@0.001

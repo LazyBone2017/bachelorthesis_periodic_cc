@@ -43,7 +43,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._start_time = time.monotonic()
         self._base_cwnd = 50000  # baseline in bytes
         # self.congestion_window = 100000
-        self._amplitude = 10000  # how much the window fluctuates
+        self._amplitude = 30000  # how much the window fluctuates
         self._frequency = 0.1  # how fast it oscillates (in Hz)
         self.latest_rtt = 0
         self.sampling_interval = 0.1
@@ -55,8 +55,8 @@ class PeriodicCongestionControl(QuicCongestionControl):
                 modulation_frequency=self._frequency,
             )
 
-        self.socket = zmq.Context().socket(zmq.PUSH)
-        self.socket.connect("tcp://127.0.0.1:5555")
+            self.socket = zmq.Context().socket(zmq.PUSH)
+            self.socket.connect("tcp://127.0.0.1:5555")
 
         asyncio.create_task(self.modulate_congestion_window())
 
@@ -71,11 +71,12 @@ class PeriodicCongestionControl(QuicCongestionControl):
             )
 
             self.congestion_window = new_conw
-            if counter == 400:
+            """if counter == 400:
                 self.congestion_window = 50000
             if counter == 200:
-                self.congestion_window = 300000
-            # counter += 1
+                self.congestion_window = 300000"""
+            counter += 1
+            print(counter)
 
             if self.is_client:
                 """self.modulation_analyzer.update_samples(
@@ -84,7 +85,6 @@ class PeriodicCongestionControl(QuicCongestionControl):
                     delta_t,
                     self.latest_rtt,
                 )"""
-
                 self.socket.send_json(
                     (
                         delta_t,
