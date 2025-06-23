@@ -41,9 +41,9 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._congestion_stash = 0
         self._rtt_monitor = QuicRttMonitor()
         self._start_time = time.monotonic()
-        self._base_cwnd = 50000  # baseline in bytes
+        self._base_cwnd = 75000  # baseline in bytes
         # self.congestion_window = 100000
-        self._amplitude = 30000  # how much the window fluctuates
+        self._amplitude = 50000  # how much the window fluctuates
         self._frequency = 0.1  # how fast it oscillates (in Hz)
         self.latest_rtt = 0
         self.sampling_interval = 0.1
@@ -67,7 +67,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
             new_conw = int(
                 self._base_cwnd
                 + self._amplitude * math.sin(2 * math.pi * self._frequency * delta_t)
-                + delta_t * 1000
+                + delta_t * 500
             )
 
             self.congestion_window = new_conw

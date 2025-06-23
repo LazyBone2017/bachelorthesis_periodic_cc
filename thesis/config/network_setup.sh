@@ -67,7 +67,7 @@ case "$CMD" in
     *)
         echo "Usage: sudo ./netns_sim.sh [setup|cleanup] [delay] [loss] [rate]"
         echo "Example:"
-        echo "  sudo ./netns_sim.sh setup 100ms 1% 5mbit"
+        echo "  sudo ./netns_sim.sh setup 100ms 1% 10mbit"
         echo "  sudo ./netns_sim.sh cleanup"
         exit 1
         ;;
