@@ -44,7 +44,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._base_cwnd = 75000  # baseline in bytes
         # self.congestion_window = 100000
         self._amplitude = 50000  # how much the window fluctuates
-        self._frequency = 0.1  # how fast it oscillates (in Hz)
+        self._frequency = 1  # how fast it oscillates (in Hz)
         self.latest_rtt = 0
         self.sampling_interval = 0.1
         self.acked_bytes_in_interval = 0
@@ -61,22 +61,17 @@ class PeriodicCongestionControl(QuicCongestionControl):
         asyncio.create_task(self.modulate_congestion_window())
 
     async def modulate_congestion_window(self):
-        counter = 0
         while True:
             delta_t = time.monotonic() - self._start_time
+            linear_slope = 500
+
+            sine_component = math.sin(2 * math.pi * self._frequency * delta_t)
+            amplitude = self._amplitude if sine_component > 0 else self._amplitude * 1.1
             new_conw = int(
-                self._base_cwnd
-                + self._amplitude * math.sin(2 * math.pi * self._frequency * delta_t)
-                + delta_t * 500
+                self._base_cwnd + amplitude * sine_component + delta_t * linear_slope
             )
 
             self.congestion_window = new_conw
-            """if counter == 400:
-                self.congestion_window = 50000
-            if counter == 200:
-                self.congestion_window = 300000"""
-            counter += 1
-            print(counter)
 
             if self.is_client:
                 """self.modulation_analyzer.update_samples(

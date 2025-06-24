@@ -14,16 +14,15 @@ from matplotlib.mlab import detrend
 from matplotlib.widgets import Button
 import numpy as np
 import scipy
+import scipy.signal
 import zmq
-
-counter = 0
 
 
 data_queue = deque(maxlen=1000)
 save_log = []
 
 
-fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1)
+fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(19.2, 10.8), dpi=100)
 plt.subplots_adjust(bottom=0.2)
 (line1,) = ax1.plot([], [], label="CongWin")
 (line2a,) = ax2.plot([], [], label="Acked Bytes")
@@ -31,7 +30,8 @@ plt.subplots_adjust(bottom=0.2)
 # (line2c,) = ax2.plot([], [], label="Acked Bytes Interpolated Demeaned", color="green")
 # (line2d,) = ax2.plot([], [], label="Acked Bytes Interpolated Detrended", color="orange")
 (line3,) = ax3.plot([], [], label="RTT")
-(line4,) = ax4.plot([], [], label="Frequency Distribution")
+(line4,) = ax4.plot([], [], label="Raw FFT")
+(line4b,) = ax4.plot([], [], label="Zero-Padding 4x", color="red")
 
 
 ax1.set_ylabel("CongWin")
@@ -42,7 +42,7 @@ ax4.set_xlabel("Frequency")
 ax4.set_ylabel("Strength")
 
 
-for ax in (ax1, ax2, ax3):
+for ax in (ax1, ax2, ax3, ax4):
     ax.legend()
     ax.grid(True)
 
@@ -82,7 +82,7 @@ def clear(event):
     update(True)
 
 
-start_button_ax = fig.add_axes([0.8, 0.05, 0.2, 0.075])
+start_button_ax = fig.add_axes([0.8, 0.05, 0.1, 0.075])
 start_button = Button(start_button_ax, "Run / Stop)")
 start_button.on_clicked(handle_start_button)
 
@@ -98,7 +98,7 @@ class DataReceiver:
         self.socket.bind("tcp://127.0.0.1:5555")  # binds for incoming PUSH connections
 
     def update_source(self):
-        ack_buffer = deque(maxlen=10)
+        ack_buffer = deque(maxlen=3)
         while True:
             try:
                 data = self.socket.recv_json(flags=zmq.NOBLOCK)
@@ -113,6 +113,49 @@ class DataReceiver:
                 pass
 
 
+def peakFormed(
+    freqs, spectrum, target_freq, rel_threshold=2.0, band_width=0.5, surround_width=0.75
+):
+    """
+    Detect if a peak is formed at a given frequency by comparing its amplitude
+    to the average amplitude in the surrounding band.
+
+    Parameters:
+    - freqs: array of frequency bins (from rfftfreq)
+    - spectrum: array of amplitudes (abs(rfft(signal)))
+    - target_freq: the frequency to watch for (e.g., 2.0)
+    - rel_threshold: how many times larger the target amp must be vs. its surrounding
+    - band_width: Hz range around target frequency to consider as "the peak" (default ±0.1 Hz)
+    - surround_width: Hz range around peak to consider as surroundings (default ±0.5 Hz)
+
+    Returns:
+    - True if peak detected, else False
+    """
+
+    # Indexes for the peak frequency region
+    peak_mask = (freqs >= target_freq - band_width) & (
+        freqs <= target_freq + band_width
+    )
+    peak_indices = np.where(peak_mask)[0]
+    if peak_indices.size == 0:
+        return False
+    peak_amp = spectrum[peak_indices].max()
+
+    # Indexes for the surrounding region, excluding the peak itself
+    surround_mask = (freqs >= target_freq - surround_width) & (
+        freqs <= target_freq + surround_width
+    )
+    surround_indices = np.where(surround_mask)[0]
+    surrounding = list(set(surround_indices) - set(peak_indices))
+
+    if not surrounding:
+        return False
+
+    surround_amp = np.mean(spectrum[surrounding]) or 1e-6  # avoid zero division
+
+    return peak_amp / surround_amp > rel_threshold
+
+
 def update(i):
     if len(data_queue) == 0:
         return
@@ -124,8 +167,13 @@ def update(i):
         zip(*data_queue)
     )
 
-    # timestamps_uniform = np.linspace(timestamps[0], timestamps[-1], 100)
-    timestamps_uniform = np.arange(timestamps[0], timestamps[-1], 0.75)
+    timestamps_uniform = np.arange(timestamps[0], timestamps[-1], 0.1)
+
+    smoothed_acks_per_interval = (
+        acks_per_interval
+        if len(acks_per_interval) <= 4
+        else scipy.signal.savgol_filter(acks_per_interval, window_length=4, polyorder=3)
+    )
     interp_acks_per_interval = np.interp(
         timestamps_uniform, timestamps, smoothed_acks_per_interval
     )
@@ -135,18 +183,27 @@ def update(i):
         signal, "linear", axis=0
     )"""  # important, has to be connected to linear increase mode
     if len(interp_acks_per_interval) != 0:
-        interp_acks_per_interval_demeaned = interp_acks_per_interval - np.mean(
-            interp_acks_per_interval
-        )
         interp_acks_per_interval_detrended = detrend(
             interp_acks_per_interval, "linear", axis=0
         )
-        fft = np.fft.rfft(interp_acks_per_interval)
-        freqs = np.fft.rfftfreq(len(interp_acks_per_interval), d=0.75)
+        window = np.hanning(len(interp_acks_per_interval_detrended))
+        windowed = interp_acks_per_interval_detrended * window
+
+        padded4 = np.pad(windowed, (0, len(windowed) * 4), "constant")
+
+        fft = np.fft.rfft(interp_acks_per_interval_detrended)
+        freqs = np.fft.rfftfreq(len(interp_acks_per_interval_detrended), d=0.1)
+
+        freqs_padding4 = np.fft.rfftfreq(len(padded4), d=0.1)
+        fft_padding4 = np.fft.rfft(padded4)
+
+        print(peakFormed(freqs_padding4, fft_padding4, 2, rel_threshold=4.0))
 
         # line2c.set_data(timestamps_uniform, interp_acks_per_interval_demeaned)
         # line2d.set_data(timestamps_uniform, interp_acks_per_interval_detrended)
-        line4.set_data(freqs[freqs > 0], np.abs(fft[freqs > 0]))
+        # line4.set_data(freqs[freqs > 0], np.abs(fft[freqs > 0]))
+        line4.set_data(freqs, np.abs(fft))
+        line4b.set_data(freqs_padding4, np.abs(fft_padding4))
 
     line1.set_data(timestamps, congwin)
     line2a.set_data(timestamps, acks_per_interval)
@@ -159,6 +216,7 @@ def update(i):
     ax3.relim()
     ax3.autoscale_view()
     ax4.relim()
+    ax4.set_xlim([0, 3])
     ax4.autoscale_view()
 
 

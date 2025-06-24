@@ -16,7 +16,7 @@ class RenoCongestionControl(QuicCongestionControl):
     New Reno congestion control.
     """
 
-    def __init__(self, *, max_datagram_size: int) -> None:
+    def __init__(self, *, max_datagram_size: int, is_client=False) -> None:
         super().__init__(max_datagram_size=max_datagram_size)
         self._max_datagram_size = max_datagram_size
         self._congestion_recovery_start_time = 0.0
