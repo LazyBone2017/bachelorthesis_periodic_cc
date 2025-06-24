@@ -197,7 +197,7 @@ def update(i):
         freqs_padding4 = np.fft.rfftfreq(len(padded4), d=0.1)
         fft_padding4 = np.fft.rfft(padded4)
 
-        print(peakFormed(freqs_padding4, fft_padding4, 2, rel_threshold=4.0))
+        # print(peakFormed(freqs_padding4, fft_padding4, 2, rel_threshold=4.0))
 
         # line2c.set_data(timestamps_uniform, interp_acks_per_interval_demeaned)
         # line2d.set_data(timestamps_uniform, interp_acks_per_interval_detrended)
@@ -216,7 +216,7 @@ def update(i):
     ax3.relim()
     ax3.autoscale_view()
     ax4.relim()
-    ax4.set_xlim([0, 3])
+    ax4.set_xlim([0, 0.3])
     ax4.autoscale_view()
 
 

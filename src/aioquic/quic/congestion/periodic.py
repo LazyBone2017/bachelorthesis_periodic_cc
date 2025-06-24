@@ -44,7 +44,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._base_cwnd = 75000  # baseline in bytes
         # self.congestion_window = 100000
         self._amplitude = 50000  # how much the window fluctuates
-        self._frequency = 1  # how fast it oscillates (in Hz)
+        self._frequency = 0.1  # how fast it oscillates (in Hz)
         self.latest_rtt = 0
         self.sampling_interval = 0.1
         self.acked_bytes_in_interval = 0
@@ -66,7 +66,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
             linear_slope = 500
 
             sine_component = math.sin(2 * math.pi * self._frequency * delta_t)
-            amplitude = self._amplitude if sine_component > 0 else self._amplitude * 1.1
+            amplitude = self._amplitude
             new_conw = int(
                 self._base_cwnd + amplitude * sine_component + delta_t * linear_slope
             )
