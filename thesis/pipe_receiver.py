@@ -24,26 +24,27 @@ save_log = []
 
 fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(19.2, 10.8), dpi=100)
 plt.subplots_adjust(bottom=0.2)
-(line1,) = ax1.plot([], [], label="CongWin")
+(line1,) = ax1.plot([], [])
 (line2a,) = ax2.plot([], [], label="Acked Bytes")
 (line2b,) = ax2.plot([], [], label="Acked Bytes Interpolated", color="red")
 # (line2c,) = ax2.plot([], [], label="Acked Bytes Interpolated Demeaned", color="green")
 # (line2d,) = ax2.plot([], [], label="Acked Bytes Interpolated Detrended", color="orange")
-(line3,) = ax3.plot([], [], label="RTT")
-(line4,) = ax4.plot([], [], label="Raw FFT")
-(line4b,) = ax4.plot([], [], label="Zero-Padding 4x", color="red")
+(line3,) = ax3.plot([], [])
+(line4,) = ax4.plot([], [], label="Savgol FFT")
+(line4b,) = ax4.plot([], [], label="Savgol Hanning 0-Pad FFT", color="red")
 
 
-ax1.set_ylabel("CongWin")
-ax2.set_ylabel("Acked")
-ax3.set_ylabel("RTT")
-ax3.set_xlabel("Time (s)")
-ax4.set_xlabel("Frequency")
-ax4.set_ylabel("Strength")
+ax1.set_ylabel("Congwin(Byte)")
+ax2.set_ylabel("Acked(Byte)")
+ax3.set_ylabel("RTT(s)")
+ax3.set_xlabel("Time(s)")
+ax4.set_xlabel("Frequency(Hz)")
+ax4.set_ylabel("Magnitude")
 
+ax2.legend(loc=1)
+ax4.legend(loc=1)
 
 for ax in (ax1, ax2, ax3, ax4):
-    ax.legend()
     ax.grid(True)
 
 
@@ -202,7 +203,7 @@ def update(i):
         # line2c.set_data(timestamps_uniform, interp_acks_per_interval_demeaned)
         # line2d.set_data(timestamps_uniform, interp_acks_per_interval_detrended)
         # line4.set_data(freqs[freqs > 0], np.abs(fft[freqs > 0]))
-        line4.set_data(freqs, np.abs(fft))
+        # line4.set_data(freqs, np.abs(fft))
         line4b.set_data(freqs_padding4, np.abs(fft_padding4))
 
     line1.set_data(timestamps, congwin)
@@ -216,7 +217,7 @@ def update(i):
     ax3.relim()
     ax3.autoscale_view()
     ax4.relim()
-    ax4.set_xlim([0, 0.3])
+    ax4.set_xlim([0, 3])
     ax4.autoscale_view()
 
 
