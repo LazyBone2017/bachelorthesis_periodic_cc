@@ -44,9 +44,9 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._base_cwnd = 60000  # baseline in bytes
         # self.congestion_window = 100000
         self._amplitude = 50000  # how much the window fluctuates
-        self._frequency = 0.5  # how fast it oscillates (in Hz)
+        self._frequency = 1  # how fast it oscillates (in Hz)
         self.latest_rtt = 0
-        self.sampling_interval = 0.1
+        self.sampling_interval = 0.2
         self.acked_bytes_in_interval = 0
 
         self.is_client = is_client
@@ -59,6 +59,9 @@ class PeriodicCongestionControl(QuicCongestionControl):
             self.socket.connect("tcp://127.0.0.1:5555")
 
         asyncio.create_task(self.modulate_congestion_window())
+
+    # RTT shold be determine sampling interval
+    # Mod Freq determines modulation interval
 
     async def modulate_congestion_window(self):
         while True:
@@ -96,7 +99,9 @@ class PeriodicCongestionControl(QuicCongestionControl):
 
     def on_packet_acked(self, *, now: float, packet: QuicSentPacket) -> None:
         self.bytes_in_flight -= packet.sent_bytes
-        self.acked_bytes_in_interval += packet.sent_bytes * (0.2 / 0.1)
+        self.acked_bytes_in_interval += packet.sent_bytes * (
+            0.4 / self.sampling_interval
+        )
         """if packet.sent_time <= self._congestion_recovery_start_time:
             return
 

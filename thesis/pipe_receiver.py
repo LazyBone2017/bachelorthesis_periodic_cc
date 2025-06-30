@@ -104,7 +104,8 @@ class DataReceiver:
             try:
                 data = self.socket.recv_json(flags=zmq.NOBLOCK)
                 ack_buffer.append(data[2])
-                data.append(sum(ack_buffer) / len(ack_buffer))
+                # data.append(sum(ack_buffer) / len(ack_buffer))
+                data.append(data[2])
                 data_queue.append(data)
                 save_log.append(data)
                 time.sleep(0.1)
@@ -168,7 +169,7 @@ def update(i):
         zip(*data_queue)
     )
 
-    timestamps_uniform = np.arange(timestamps[0], timestamps[-1], 0.1)
+    timestamps_uniform = np.arange(timestamps[0], timestamps[-1], 0.2)
 
     smoothed_acks_per_interval = (
         acks_per_interval
@@ -193,9 +194,9 @@ def update(i):
         padded4 = np.pad(windowed, (0, len(windowed) * 4), "constant")
 
         fft = np.fft.rfft(interp_acks_per_interval_detrended)
-        freqs = np.fft.rfftfreq(len(interp_acks_per_interval_detrended), d=0.1)
+        freqs = np.fft.rfftfreq(len(interp_acks_per_interval_detrended), d=0.2)
 
-        freqs_padding4 = np.fft.rfftfreq(len(padded4), d=0.1)
+        freqs_padding4 = np.fft.rfftfreq(len(padded4), d=0.2)
         fft_padding4 = np.fft.rfft(padded4)
 
         # print(peakFormed(freqs_padding4, fft_padding4, 2, rel_threshold=4.0))
