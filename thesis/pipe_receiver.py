@@ -17,8 +17,11 @@ import scipy
 import scipy.signal
 import zmq
 
+from analyzer_unit import AnalyzerUnit
 
-data_queue = deque(maxlen=1000)
+
+# data_queue = deque(maxlen=1000)
+_analyzer_unit = AnalyzerUnit(sampling_rate=10, modulation_frequency=0.5)
 save_log = []
 
 
@@ -26,12 +29,17 @@ fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(19.2, 10.8), dpi=100)
 plt.subplots_adjust(bottom=0.2)
 (line1,) = ax1.plot([], [])
 (line2a,) = ax2.plot([], [], label="Acked Bytes")
-(line2b,) = ax2.plot([], [], label="Acked Bytes Interpolated", color="red")
-# (line2c,) = ax2.plot([], [], label="Acked Bytes Interpolated Demeaned", color="green")
-# (line2d,) = ax2.plot([], [], label="Acked Bytes Interpolated Detrended", color="orange")
-(line3,) = ax3.plot([], [])
-(line4,) = ax4.plot([], [], label="Savgol FFT")
-(line4b,) = ax4.plot([], [], label="Savgol Hanning 0-Pad FFT", color="red")
+(line2b,) = ax2.plot([], [], label="Acked Bytes Filtered", color="red")
+(line2c,) = ax2.plot([], [], label="Acked Bytes Filtered Interpolated", color="green")
+"""(line2d,) = ax2.plot(
+    [], [], label="Acked Bytes Filtered Interpolated Detrended", color="orange"
+)
+(line2e,) = ax2.plot(
+    [], [], label="Acked Bytes Filtered Interpolated Detrended Windowed", color="pink"
+)
+(line3,) = ax3.plot([], [])"""
+(line4,) = ax4.plot([], [], label="FFT")
+# (line4b,) = ax4.plot([], [], label="Savgol Hanning 0-Pad FFT", color="red")
 
 
 ax1.set_ylabel("Congwin(Byte)")
@@ -79,7 +87,7 @@ def handle_start_button(event):
 
 
 def clear(event):
-    data_queue.clear()
+    _analyzer_unit.input_queue.clear()
     update(True)
 
 
@@ -99,14 +107,14 @@ class DataReceiver:
         self.socket.bind("tcp://127.0.0.1:5555")  # binds for incoming PUSH connections
 
     def update_source(self):
-        ack_buffer = deque(maxlen=3)
+        # ack_buffer = deque(maxlen=3)
         while True:
             try:
                 data = self.socket.recv_json(flags=zmq.NOBLOCK)
-                ack_buffer.append(data[2])
+                # ack_buffer.append(data[2])
                 # data.append(sum(ack_buffer) / len(ack_buffer))
-                data.append(data[2])
-                data_queue.append(data)
+                # data.append(data[2])
+                _analyzer_unit.input_queue.append(data)
                 save_log.append(data)
                 time.sleep(0.1)
             except zmq.Again:
@@ -159,6 +167,22 @@ def peakFormed(
 
 
 def update(i):
+    _analyzer_unit.update_processing()
+    line1.set_data(_analyzer_unit._delta_t, _analyzer_unit._congwin)
+    line2a.set_data(_analyzer_unit._delta_t, _analyzer_unit._raw_acks)
+    line2b.set_data(_analyzer_unit._delta_t, _analyzer_unit._filtered_acks)
+    line2c.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._interpolated_acks)
+    """line2d.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._detrended_acks)
+    line2e.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._windowed_acks)"""
+    line4.set_data(_analyzer_unit._fft_freqs, _analyzer_unit._fft_magnitudes)
+    ax1.relim()
+    ax1.autoscale_view()
+    ax2.relim()
+    ax2.autoscale_view()
+    ax4.relim()
+    ax4.set_xlim([0, 3])
+    ax4.autoscale_view()
+    '''
     if len(data_queue) == 0:
         return
 
@@ -219,7 +243,7 @@ def update(i):
     ax3.autoscale_view()
     ax4.relim()
     ax4.set_xlim([0, 3])
-    ax4.autoscale_view()
+    ax4.autoscale_view()'''
 
 
 receiver = DataReceiver()
