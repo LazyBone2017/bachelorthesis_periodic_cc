@@ -1,6 +1,7 @@
 import asyncio
 from collections import deque
 import csv
+from enum import Enum, auto
 import math
 import os
 import time
@@ -13,6 +14,7 @@ import numpy as np
 import zmq
 
 from ModulationAnalyzer import ModulationAnalyzer
+from analyzer_unit import AnalyzerUnit
 
 from ..packet_builder import QuicSentPacket
 from .base import (
@@ -29,6 +31,13 @@ ACK_BYTES_SUM = 0
 PACKET_LOG = []
 
 
+class OperationState(Enum):
+    STARTUP = auto()
+    INCREASE = auto()
+    MITIGATION = auto()
+    STABLE = auto()
+
+
 class PeriodicCongestionControl(QuicCongestionControl):
     """
     New Periodic congestion control.
@@ -43,66 +52,84 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._start_time = time.monotonic()
         self._base_cwnd = 40000  # baseline in bytes
         # self.congestion_window = 100000
-        self._amplitude = 20000  # how much the window fluctuates
+        self._amplitude = 10000  # how much the window fluctuates
         self._frequency = 0.5  # how fast it oscillates (in Hz)
         self.latest_rtt = 0
         self.sampling_interval = 0.2
         self.acked_bytes_in_interval = 0
+        self._operation_state = OperationState.STARTUP
 
         self.is_client = is_client
         if is_client:
             self.socket = zmq.Context().socket(zmq.PUSH)
             self.socket.connect("tcp://127.0.0.1:5555")
 
+        self._analyzer_unit = AnalyzerUnit(
+            modulation_frequency=self._frequency,
+            sampling_rate=1 / self.sampling_interval,
+        )
+
         asyncio.create_task(self.modulate_congestion_window())
         asyncio.create_task(self.pass_timestamps())
+        asyncio.create_task(self.control())
 
     # RTT shold be determine sampling interval
     # Mod Freq determines modulation interval
 
+    async def control(self):
+        while True:
+            self._analyzer_unit.update_processing()
+            print("STATE")
+            print(self._operation_state)
+            match self._operation_state:
+                case OperationState.STARTUP:
+                    # end of startup
+                    if (
+                        len(self._analyzer_unit.input_queue)
+                        == self._analyzer_unit.input_queue.maxlen
+                    ):
+                        print(self._analyzer_unit.input_queue.maxlen)
+                        self._operation_state = OperationState.INCREASE
+                case OperationState.INCREASE:
+                    if self._analyzer_unit.get_base_to_second_harmonic_ratio() > 0.1:
+                        self._operation_state = OperationState.MITIGATION
+                case OperationState.MITIGATION:
+                    if self._analyzer_unit.get_base_to_second_harmonic_ratio() < 0.1:
+                        self._operation_state = OperationState.STABLE
+                case _:
+                    print("ELSE")
+            await asyncio.sleep(1)
+
     async def modulate_congestion_window(self):
         while True:
             delta_t = time.monotonic() - self._start_time
-            linear_slope = 1000
-
+            slope = 1000
             sine_component = math.sin(2 * math.pi * self._frequency * delta_t)
             amplitude = self._amplitude * (1.2 if sine_component < 0 else 1)
-            new_conw = int(
-                self._base_cwnd + amplitude * sine_component + delta_t * linear_slope
-            )
+            if self._operation_state == OperationState.INCREASE:
+                self._base_cwnd += slope
+            if self._operation_state == OperationState.MITIGATION:
+                self._base_cwnd -= slope
+            if self._operation_state == OperationState.STABLE:
+                x = 1  # only to have a visible case, cwnd_base doesnt chan
+
+            new_conw = int(self._base_cwnd + amplitude * sine_component)
 
             self.congestion_window = new_conw
-
-            if self.is_client:
-                """self.modulation_analyzer.update_samples(
-                    self.congestion_window,
-                    self.acked_bytes_in_interval,
-                    delta_t,
-                    self.latest_rtt,
-                )
-                self.socket.send_json(
-                    (
-                        delta_t,
-                        self.congestion_window,
-                        self.acked_bytes_in_interval,
-                        self.latest_rtt,
-                    )
-                )  # Non-blocking send"""
-                # self._frequency = self.modulation_analyzer.modulation_frequency
 
             # set update frequency, inv. proportional to modulation frequency
             await asyncio.sleep(1 / (10 * self._frequency))
 
     async def pass_timestamps(self):
         while True:
-            self.socket.send_json(
-                (
-                    time.monotonic() - self._start_time,
-                    self.congestion_window,
-                    self.acked_bytes_in_interval,
-                    self.latest_rtt,
-                )
+            timestamp = (
+                time.monotonic() - self._start_time,
+                self.congestion_window,
+                self.acked_bytes_in_interval,
+                self.latest_rtt,
             )
+            self.socket.send_json(timestamp)
+            self._analyzer_unit.input_queue.append(timestamp)
             self.acked_bytes_in_interval = 0
 
             await asyncio.sleep(self.sampling_interval)

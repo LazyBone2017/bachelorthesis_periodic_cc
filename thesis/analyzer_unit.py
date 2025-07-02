@@ -12,7 +12,7 @@ class AnalyzerUnit:
     def __init__(self, sampling_rate, modulation_frequency):
         self._sampling_rate = sampling_rate
         self._modulation_frequency = modulation_frequency
-        self.input_queue = deque(maxlen=int(sampling_rate / modulation_frequency * 5))
+        self.input_queue = deque(maxlen=int(sampling_rate / modulation_frequency * 3))
         self._acks_in_process = []
         self._delta_t = []
         self._raw_acks = []
@@ -28,7 +28,6 @@ class AnalyzerUnit:
         self._fft_freqs = np.array([])
         self._rtt_estimate = 0
         self._base_to_second_harmonic_ratio = deque(maxlen=self.input_queue.maxlen)
-        self._ratio_averaged = deque([0], maxlen=self.input_queue.maxlen)
 
     def gen_uniform_delta_t(self):
         self._delta_t_uniform = np.arange(
@@ -98,10 +97,12 @@ class AnalyzerUnit:
         self._base_to_second_harmonic_ratio.append(
             second_harmonic_magnitude / base_magnitude
         )
-        self._ratio_averaged.append(
-            sum(list(self._base_to_second_harmonic_ratio))
-            / len(self._base_to_second_harmonic_ratio)
-        )
+
+    def get_base_to_second_harmonic_ratio(self):
+        print(len(self._base_to_second_harmonic_ratio))
+        if len(self._base_to_second_harmonic_ratio) == 0:
+            return None
+        return self._base_to_second_harmonic_ratio[-1]
 
     def update_processing(self):
         if len(self.input_queue) == 0:

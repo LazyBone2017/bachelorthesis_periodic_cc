@@ -182,10 +182,6 @@ def update(i):
         np.arange(len(_analyzer_unit._base_to_second_harmonic_ratio)),
         _analyzer_unit._base_to_second_harmonic_ratio,
     )
-    line3b.set_data(
-        np.arange(len(_analyzer_unit._ratio_averaged)),
-        _analyzer_unit._ratio_averaged,
-    )
     line4.set_data(_analyzer_unit._fft_freqs, _analyzer_unit._fft_magnitudes)
     ax1.relim()
     ax1.autoscale_view()
