@@ -36,16 +36,20 @@ plt.subplots_adjust(bottom=0.2)
 )
 (line2e,) = ax2.plot(
     [], [], label="Acked Bytes Filtered Interpolated Detrended Windowed", color="pink"
-)
-(line3,) = ax3.plot([], [])"""
+)"""
+(line3a,) = ax3.plot([], [], label="Ratio", color="red")
+(line3b,) = ax3.plot([], [], label="Ratio Avg", color="blue")
+
 (line4,) = ax4.plot([], [], label="FFT")
 # (line4b,) = ax4.plot([], [], label="Savgol Hanning 0-Pad FFT", color="red")
 
 
 ax1.set_ylabel("Congwin(Byte)")
 ax2.set_ylabel("Acked(Byte)")
-ax3.set_ylabel("RTT(s)")
+# ax3.set_ylabel("RTT(s)")
+# ax3.set_xlabel("Time(s)")
 ax3.set_xlabel("Time(s)")
+ax3.set_ylabel("Base to 2nd Harmonic Ratio")
 ax4.set_xlabel("Frequency(Hz)")
 ax4.set_ylabel("Magnitude")
 
@@ -174,9 +178,20 @@ def update(i):
     line2c.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._interpolated_acks)
     """line2d.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._detrended_acks)
     line2e.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._windowed_acks)"""
+    line3a.set_data(
+        np.arange(len(_analyzer_unit._base_to_second_harmonic_ratio)),
+        _analyzer_unit._base_to_second_harmonic_ratio,
+    )
+    line3b.set_data(
+        np.arange(len(_analyzer_unit._ratio_averaged)),
+        _analyzer_unit._ratio_averaged,
+    )
     line4.set_data(_analyzer_unit._fft_freqs, _analyzer_unit._fft_magnitudes)
     ax1.relim()
     ax1.autoscale_view()
+    ax3.relim()
+    ax3.set_ylim(0, 0.5)
+    ax3.autoscale_view()
     ax2.relim()
     ax2.autoscale_view()
     ax4.relim()

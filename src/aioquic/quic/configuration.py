@@ -143,9 +143,11 @@ class QuicConfiguration:
             with open(keyfile, "rb") as fp:
                 self.private_key = load_pem_private_key(
                     fp.read(),
-                    password=password.encode("utf8")
-                    if isinstance(password, str)
-                    else password,
+                    password=(
+                        password.encode("utf8")
+                        if isinstance(password, str)
+                        else password
+                    ),
                 )
 
     def load_verify_locations(

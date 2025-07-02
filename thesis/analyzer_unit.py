@@ -11,6 +11,7 @@ import scipy
 class AnalyzerUnit:
     def __init__(self, sampling_rate, modulation_frequency):
         self._sampling_rate = sampling_rate
+        self._modulation_frequency = modulation_frequency
         self.input_queue = deque(maxlen=int(sampling_rate / modulation_frequency * 5))
         self._acks_in_process = []
         self._delta_t = []
@@ -24,8 +25,10 @@ class AnalyzerUnit:
         self._windowed_acks = []
         self._padded_acks = []
         self._fft_magnitudes = []
-        self._fft_freqs = []
+        self._fft_freqs = np.array([])
         self._rtt_estimate = 0
+        self._base_to_second_harmonic_ratio = deque(maxlen=self.input_queue.maxlen)
+        self._ratio_averaged = deque([0], maxlen=self.input_queue.maxlen)
 
     def gen_uniform_delta_t(self):
         self._delta_t_uniform = np.arange(
@@ -78,6 +81,28 @@ class AnalyzerUnit:
             len(self._acks_in_process), d=1 / self._sampling_rate
         )
 
+    def generate_base_to_second_harmonic_ratio(self):
+        if len(self._fft_freqs) == 0:
+            self._base_to_second_harmonic_ratio.append(0)
+            return
+        base_magnitude = self._fft_magnitudes[
+            np.argmin(np.abs(self._fft_freqs - self._modulation_frequency))
+        ]
+        second_harmonic_magnitude = self._fft_magnitudes[
+            np.argmin(np.abs(self._fft_freqs - self._modulation_frequency * 2))
+        ]
+        if base_magnitude == 0:
+            self._base_to_second_harmonic_ratio.append(0)
+            return
+
+        self._base_to_second_harmonic_ratio.append(
+            second_harmonic_magnitude / base_magnitude
+        )
+        self._ratio_averaged.append(
+            sum(list(self._base_to_second_harmonic_ratio))
+            / len(self._base_to_second_harmonic_ratio)
+        )
+
     def update_processing(self):
         if len(self.input_queue) == 0:
             return
@@ -95,6 +120,7 @@ class AnalyzerUnit:
         self._acks_in_process = self.apply_zero_padding(factor=4)
 
         self.generate_fft()
+        self.generate_base_to_second_harmonic_ratio()
 
     # TODO average this in a probing manner for later
     def update_rtt(self, last_rtt):

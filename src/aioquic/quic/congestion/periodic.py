@@ -41,24 +41,21 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._congestion_stash = 0
         self._rtt_monitor = QuicRttMonitor()
         self._start_time = time.monotonic()
-        self._base_cwnd = 60000  # baseline in bytes
+        self._base_cwnd = 40000  # baseline in bytes
         # self.congestion_window = 100000
-        self._amplitude = 50000  # how much the window fluctuates
+        self._amplitude = 20000  # how much the window fluctuates
         self._frequency = 0.5  # how fast it oscillates (in Hz)
         self.latest_rtt = 0
-        self.sampling_interval = 0.1
+        self.sampling_interval = 0.2
         self.acked_bytes_in_interval = 0
 
         self.is_client = is_client
         if is_client:
-            self.modulation_analyzer = ModulationAnalyzer(
-                modulation_frequency=self._frequency,
-            )
-
             self.socket = zmq.Context().socket(zmq.PUSH)
             self.socket.connect("tcp://127.0.0.1:5555")
 
         asyncio.create_task(self.modulate_congestion_window())
+        asyncio.create_task(self.pass_timestamps())
 
     # RTT shold be determine sampling interval
     # Mod Freq determines modulation interval
@@ -69,7 +66,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
             linear_slope = 1000
 
             sine_component = math.sin(2 * math.pi * self._frequency * delta_t)
-            amplitude = self._amplitude
+            amplitude = self._amplitude * (1.2 if sine_component < 0 else 1)
             new_conw = int(
                 self._base_cwnd + amplitude * sine_component + delta_t * linear_slope
             )
@@ -82,7 +79,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
                     self.acked_bytes_in_interval,
                     delta_t,
                     self.latest_rtt,
-                )"""
+                )
                 self.socket.send_json(
                     (
                         delta_t,
@@ -90,17 +87,30 @@ class PeriodicCongestionControl(QuicCongestionControl):
                         self.acked_bytes_in_interval,
                         self.latest_rtt,
                     )
-                )  # Non-blocking send
-                self.acked_bytes_in_interval = 0
-                self._frequency = self.modulation_analyzer.modulation_frequency
+                )  # Non-blocking send"""
+                # self._frequency = self.modulation_analyzer.modulation_frequency
 
             # set update frequency, inv. proportional to modulation frequency
+            await asyncio.sleep(1 / (10 * self._frequency))
+
+    async def pass_timestamps(self):
+        while True:
+            self.socket.send_json(
+                (
+                    time.monotonic() - self._start_time,
+                    self.congestion_window,
+                    self.acked_bytes_in_interval,
+                    self.latest_rtt,
+                )
+            )
+            self.acked_bytes_in_interval = 0
+
             await asyncio.sleep(self.sampling_interval)
 
     def on_packet_acked(self, *, now: float, packet: QuicSentPacket) -> None:
         self.bytes_in_flight -= packet.sent_bytes
         self.acked_bytes_in_interval += packet.sent_bytes * (
-            0.2 / self.sampling_interval
+            0.1 / self.sampling_interval
         )
         """if packet.sent_time <= self._congestion_recovery_start_time:
             return
