@@ -52,9 +52,9 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._start_time = time.monotonic()
         self._base_cwnd = 40000  # baseline in bytes
         # self.congestion_window = 100000
-        self._amplitude = 10000  # how much the window fluctuates
-        self._frequency = 0.5  # how fast it oscillates (in Hz)
-        self.latest_rtt = 0
+        self._amplitude = self._base_cwnd * 0.25  # how much the window fluctuates
+        self._frequency = 1  # how fast it oscillates (in Hz)
+        self.latest_rtt = 0.5
         self.sampling_interval = 0.2
         self.acked_bytes_in_interval = 0
         self._operation_state = OperationState.STARTUP
@@ -84,18 +84,18 @@ class PeriodicCongestionControl(QuicCongestionControl):
             match self._operation_state:
                 case OperationState.STARTUP:
                     # end of startup
-                    if (
-                        len(self._analyzer_unit.input_queue)
-                        == self._analyzer_unit.input_queue.maxlen
-                    ):
-                        print(self._analyzer_unit.input_queue.maxlen)
+                    if time.monotonic() - self._start_time > 10:
+                        print("INCREASE")
                         self._operation_state = OperationState.INCREASE
                 case OperationState.INCREASE:
-                    if self._analyzer_unit.get_base_to_second_harmonic_ratio() > 0.1:
+                    if self._analyzer_unit._congwin_to_response_ratio[-1] < 0.875:
                         self._operation_state = OperationState.MITIGATION
                 case OperationState.MITIGATION:
-                    if self._analyzer_unit.get_base_to_second_harmonic_ratio() < 0.1:
+                    if self._analyzer_unit._congwin_to_response_ratio[-1] >= 0.875:
                         self._operation_state = OperationState.STABLE
+                case OperationState.STABLE:
+                    if self._analyzer_unit._congwin_to_response_ratio[-1] < 0.875:
+                        self._operation_state = OperationState.MITIGATION
                 case _:
                     print("ELSE")
             await asyncio.sleep(1)
@@ -103,13 +103,16 @@ class PeriodicCongestionControl(QuicCongestionControl):
     async def modulate_congestion_window(self):
         while True:
             delta_t = time.monotonic() - self._start_time
-            slope = 1000
+            slope = 500
             sine_component = math.sin(2 * math.pi * self._frequency * delta_t)
-            amplitude = self._amplitude * (1.2 if sine_component < 0 else 1)
+            amplitude = (
+                self._base_cwnd * 0.25 * (1 if sine_component < 0 else 1)
+            )  # no effect
             if self._operation_state == OperationState.INCREASE:
                 self._base_cwnd += slope
             if self._operation_state == OperationState.MITIGATION:
-                self._base_cwnd -= slope
+                self._base_cwnd = self._analyzer_unit.get_bdp_estimate() * 0.95
+                print(self._base_cwnd)
             if self._operation_state == OperationState.STABLE:
                 x = 1  # only to have a visible case, cwnd_base doesnt chan
 

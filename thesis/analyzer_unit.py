@@ -3,6 +3,7 @@ from collections import deque
 from matplotlib.mlab import detrend
 import numpy as np
 import scipy
+import scipy.signal
 
 
 # unit holds a single version of all processing applied _acks_in_process, saving intermediary states in dedicated fields
@@ -17,6 +18,7 @@ class AnalyzerUnit:
         self._delta_t = []
         self._raw_acks = []
         self._congwin = []
+        self._ack_rate = []
 
         self._delta_t_uniform = []
         self._filtered_acks = []
@@ -26,13 +28,23 @@ class AnalyzerUnit:
         self._padded_acks = []
         self._fft_magnitudes = []
         self._fft_freqs = np.array([])
-        self._rtt_estimate = 0
+        self._rtt_estimate = 0.1
+        self._rtts = []
         self._base_to_second_harmonic_ratio = deque(maxlen=self.input_queue.maxlen)
+        self._congwin_to_response_ratio = deque(maxlen=self.input_queue.maxlen)
 
-    def gen_uniform_delta_t(self):
-        self._delta_t_uniform = np.arange(
-            self._delta_t[0], self._delta_t[-1], 1 / self._sampling_rate
-        )
+    def gen_uniform_delta_t(self, midpoint_aligned):
+        if midpoint_aligned:
+            # print("----------------------------")
+            # print("DELTA_T" + str(len(self._delta_t)))
+            self._delta_t_uniform = (
+                np.array(self._delta_t[:-1]) + np.array(self._delta_t[1:])
+            ) / 2
+            # print("DELTA_T_uniform" + str(len(self._delta_t_uniform)))
+        else:
+            self._delta_t_uniform = np.arange(
+                self._delta_t[0], self._delta_t[-1], 1 / self._sampling_rate
+            )
 
     def apply_filter(self, window):
         if len(self._acks_in_process) <= 4:
@@ -50,6 +62,16 @@ class AnalyzerUnit:
             self._delta_t_uniform, self._delta_t, self._acks_in_process
         )
         return self._interpolated_acks
+
+    def apply_differential(self):
+        if len(self._acks_in_process) == 0:
+            return
+        acks_cumsum = np.cumsum(self._acks_in_process)
+        delta_t_diff = np.diff(self._delta_t)
+        acks_cum_diff = np.diff(acks_cumsum)
+        self._ack_rate = (acks_cum_diff / delta_t_diff) / int(1 / 0.1)
+        print("RATE" + str(len(self._ack_rate)))
+        print("----------------------------")
 
     def apply_detrending(self):
         if len(self._acks_in_process) == 0:
@@ -99,10 +121,24 @@ class AnalyzerUnit:
         )
 
     def get_base_to_second_harmonic_ratio(self):
-        print(len(self._base_to_second_harmonic_ratio))
         if len(self._base_to_second_harmonic_ratio) == 0:
             return None
         return self._base_to_second_harmonic_ratio[-1]
+
+    def generate_congwin_to_response_ratio(self):
+        if len(self._congwin) == 0 or len(self._acks_in_process) == 0:
+            print("RE")
+            return
+        avg_congwin = sum(self._congwin) / len(self._congwin)
+        avg_acks = sum(self._acks_in_process) / len(self._acks_in_process)
+        self._congwin_to_response_ratio.append(avg_acks / avg_congwin)
+
+    def get_bdp_estimate(self):
+        if len(self._acks_in_process) == 0:
+            return
+        peaks, _ = scipy.signal.find_peaks(self._acks_in_process)
+        if len(peaks) != 0:
+            return np.mean(self._acks_in_process[peaks])
 
     def update_processing(self):
         if len(self.input_queue) == 0:
@@ -110,19 +146,25 @@ class AnalyzerUnit:
         self._delta_t, self._congwin, self._raw_acks, latest_rtt = zip(
             *self.input_queue
         )
+        self.update_rtt(latest_rtt)
+        self._rtts = latest_rtt
         self._acks_in_process = self._raw_acks
+        # self._acks_in_process = self._congwin
 
-        self.gen_uniform_delta_t()
+        # self.gen_uniform_delta_t(midpoint_aligned=False)
+        # self.gen_uniform_delta_t(midpoint_aligned=True)
 
         self._acks_in_process = self.apply_filter(window=4)
-        self._acks_in_process = self.apply_interpolation()
-        self._acks_in_process = self.apply_detrending()
-        self._acks_in_process = self.apply_windowing()
-        self._acks_in_process = self.apply_zero_padding(factor=4)
+        # self._acks_in_process = self.apply_interpolation()
+        self.generate_congwin_to_response_ratio()
+        # self.apply_differential()
+        # self._acks_in_process = self.apply_detrending()
+        # self._acks_in_process = self.apply_windowing()
+        # self._acks_in_process = self.apply_zero_padding(factor=4)
 
-        self.generate_fft()
-        self.generate_base_to_second_harmonic_ratio()
+        # self.generate_fft()
+        # self.generate_base_to_second_harmonic_ratio()
 
     # TODO average this in a probing manner for later
-    def update_rtt(self, last_rtt):
-        self._rtt_estimate = last_rtt
+    def update_rtt(self, latest_rtt):
+        self._rtt_estimate = latest_rtt[-1]

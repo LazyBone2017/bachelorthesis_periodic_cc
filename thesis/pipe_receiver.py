@@ -21,7 +21,7 @@ from analyzer_unit import AnalyzerUnit
 
 
 # data_queue = deque(maxlen=1000)
-_analyzer_unit = AnalyzerUnit(sampling_rate=10, modulation_frequency=0.5)
+_analyzer_unit = AnalyzerUnit(sampling_rate=5, modulation_frequency=1)
 save_log = []
 
 
@@ -175,18 +175,20 @@ def update(i):
     line1.set_data(_analyzer_unit._delta_t, _analyzer_unit._congwin)
     line2a.set_data(_analyzer_unit._delta_t, _analyzer_unit._raw_acks)
     line2b.set_data(_analyzer_unit._delta_t, _analyzer_unit._filtered_acks)
-    line2c.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._interpolated_acks)
+    line3a.set_data(_analyzer_unit._delta_t, _analyzer_unit._rtts)
+    # line2c.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._interpolated_acks)
     """line2d.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._detrended_acks)
     line2e.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._windowed_acks)"""
-    line3a.set_data(
+    """line3a.set_data(
         np.arange(len(_analyzer_unit._base_to_second_harmonic_ratio)),
         _analyzer_unit._base_to_second_harmonic_ratio,
     )
-    line4.set_data(_analyzer_unit._fft_freqs, _analyzer_unit._fft_magnitudes)
+
+    line4.set_data(_analyzer_unit._fft_freqs, _analyzer_unit._fft_magnitudes)"""
     ax1.relim()
     ax1.autoscale_view()
     ax3.relim()
-    ax3.set_ylim(0, 0.5)
+    ax3.set_ylim(0, 0.25)
     ax3.autoscale_view()
     ax2.relim()
     ax2.autoscale_view()
