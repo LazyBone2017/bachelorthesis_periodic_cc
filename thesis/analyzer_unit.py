@@ -14,24 +14,31 @@ class AnalyzerUnit:
         self._sampling_rate = sampling_rate
         self._modulation_frequency = modulation_frequency
         self.input_queue = deque(maxlen=int(sampling_rate / modulation_frequency * 3))
-        self._acks_in_process = []
-        self._delta_t = []
-        self._raw_acks = []
-        self._congwin = []
-        self._ack_rate = []
+        self._acks_in_process = [0] * self.input_queue.maxlen
+        self._delta_t = [0] * self.input_queue.maxlen
+        self._raw_acks = [0] * self.input_queue.maxlen
+        self._congwin = [0] * self.input_queue.maxlen
+        self._ack_rate = [0] * self.input_queue.maxlen
 
-        self._delta_t_uniform = []
-        self._filtered_acks = []
-        self._interpolated_acks = []
-        self._detrended_acks = []
-        self._windowed_acks = []
-        self._padded_acks = []
-        self._fft_magnitudes = []
+        self._delta_t_uniform = [0] * self.input_queue.maxlen
+        self._filtered_acks = [0] * self.input_queue.maxlen
+        self._interpolated_acks = [0] * self.input_queue.maxlen
+        self._detrended_acks = [0] * self.input_queue.maxlen
+        self._windowed_acks = [0] * self.input_queue.maxlen
+        self._padded_acks = [0] * self.input_queue.maxlen
+        self._fft_magnitudes = [0] * self.input_queue.maxlen
         self._fft_freqs = np.array([])
         self._rtt_estimate = 0.1
-        self._rtts = []
-        self._base_to_second_harmonic_ratio = deque(maxlen=self.input_queue.maxlen)
-        self._congwin_to_response_ratio = deque(maxlen=self.input_queue.maxlen)
+        self._rtts = [0] * self.input_queue.maxlen
+        self._base_to_second_harmonic_ratio = deque(
+            [0] * self.input_queue.maxlen, maxlen=self.input_queue.maxlen
+        )
+        self._congwin_to_response_ratio = deque(
+            [0] * self.input_queue.maxlen, maxlen=self.input_queue.maxlen
+        )
+        self._base_cwnd = deque(
+            [0] * self.input_queue.maxlen, maxlen=self.input_queue.maxlen
+        )
 
     def gen_uniform_delta_t(self, midpoint_aligned):
         if midpoint_aligned:
@@ -125,13 +132,26 @@ class AnalyzerUnit:
             return None
         return self._base_to_second_harmonic_ratio[-1]
 
-    def generate_congwin_to_response_ratio(self):
+    def generate_congwin_to_response_ratio(self, congwin_base):
+        if self._congwin is None:
+            self._congwin_to_response_ratio.append(0)
+            return
         if len(self._congwin) == 0 or len(self._acks_in_process) == 0:
             print("RE")
             return
-        avg_congwin = sum(self._congwin) / len(self._congwin)
-        avg_acks = sum(self._acks_in_process) / len(self._acks_in_process)
-        self._congwin_to_response_ratio.append(avg_acks / avg_congwin)
+
+        # get congin peak and valley delta
+        max, _ = scipy.signal.find_peaks(self._congwin)
+        congwin_peak_avg = 1
+        if len(self._congwin[max]) != 0:
+            congwin_peak_avg = np.max(self._congwin[max])
+
+        max, _ = scipy.signal.find_peaks(self._acks_in_process)
+        response_peak_avg = 0
+        if len(self._acks_in_process[max]) != 0:
+            response_peak_avg = np.max(self._acks_in_process[max])
+        
+        self._congwin_to_response_ratio.append(response_peak_avg / congwin_peak_avg)
 
     def get_bdp_estimate(self):
         if len(self._acks_in_process) == 0:
@@ -143,20 +163,22 @@ class AnalyzerUnit:
     def update_processing(self):
         if len(self.input_queue) == 0:
             return
-        self._delta_t, self._congwin, self._raw_acks, latest_rtt = zip(
+        self._delta_t, congwin, self._raw_acks, latest_rtt, conwin_base = zip(
             *self.input_queue
         )
+        self._congwin = np.array(congwin)
+        self._acks_in_process = np.array(self._raw_acks)
         self.update_rtt(latest_rtt)
         self._rtts = latest_rtt
-        self._acks_in_process = self._raw_acks
+        self._base_cwnd = conwin_base
         # self._acks_in_process = self._congwin
 
-        # self.gen_uniform_delta_t(midpoint_aligned=False)
+        self.gen_uniform_delta_t(midpoint_aligned=False)
         # self.gen_uniform_delta_t(midpoint_aligned=True)
 
         self._acks_in_process = self.apply_filter(window=4)
-        # self._acks_in_process = self.apply_interpolation()
-        self.generate_congwin_to_response_ratio()
+        self._acks_in_process = self.apply_interpolation()
+        self.generate_congwin_to_response_ratio(conwin_base)
         # self.apply_differential()
         # self._acks_in_process = self.apply_detrending()
         # self._acks_in_process = self.apply_windowing()

@@ -50,12 +50,14 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._congestion_stash = 0
         self._rtt_monitor = QuicRttMonitor()
         self._start_time = time.monotonic()
-        self._base_cwnd = 40000  # baseline in bytes
+        self._base_cwnd = 10000  # baseline in bytes
         # self.congestion_window = 100000
-        self._amplitude = self._base_cwnd * 0.25  # how much the window fluctuates
+        # self._amplitude = self._base_cwnd * 0.35  # 0.25
+        self._base_to_amplitude_ratio = 0.35
         self._frequency = 1  # how fast it oscillates (in Hz)
-        self.latest_rtt = 0.5
-        self.sampling_interval = 0.2
+        self.latest_rtt = 0.1
+        self.rtt_estimate = 0.1
+        self.sampling_interval = 0.1
         self.acked_bytes_in_interval = 0
         self._operation_state = OperationState.STARTUP
 
@@ -81,24 +83,35 @@ class PeriodicCongestionControl(QuicCongestionControl):
             self._analyzer_unit.update_processing()
             print("STATE")
             print(self._operation_state)
+            if len(self._analyzer_unit._rtts) != 0:
+                self.rtt_estimate = np.min(self._analyzer_unit._rtts)
+                print(self.rtt_estimate)
             match self._operation_state:
                 case OperationState.STARTUP:
                     # end of startup
-                    if time.monotonic() - self._start_time > 10:
-                        print("INCREASE")
+                    print(np.mean(self._analyzer_unit._congwin_to_response_ratio))
+                    print(self._analyzer_unit._congwin_to_response_ratio)
+                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) > 0.9:
+                        print("SWITCH TO INCREASE")
                         self._operation_state = OperationState.INCREASE
                 case OperationState.INCREASE:
-                    if self._analyzer_unit._congwin_to_response_ratio[-1] < 0.875:
+                    if self._analyzer_unit._congwin_to_response_ratio[-1] < 0.75:
+                        print("SWITCH TO MITIGATE")
                         self._operation_state = OperationState.MITIGATION
                 case OperationState.MITIGATION:
-                    if self._analyzer_unit._congwin_to_response_ratio[-1] >= 0.875:
+                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) >= 0.75:
                         self._operation_state = OperationState.STABLE
                 case OperationState.STABLE:
-                    if self._analyzer_unit._congwin_to_response_ratio[-1] < 0.875:
+                    # BDP has decreased
+                    if self._analyzer_unit._congwin_to_response_ratio[-1] < 0.75:
                         self._operation_state = OperationState.MITIGATION
+                        # BDP has increased
+                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) > 0.9:
+                        print("SWITCH TO INCREASE")
+                        self._operation_state = OperationState.INCREASE
                 case _:
                     print("ELSE")
-            await asyncio.sleep(1)
+            await asyncio.sleep(self.sampling_interval)
 
     async def modulate_congestion_window(self):
         while True:
@@ -106,12 +119,14 @@ class PeriodicCongestionControl(QuicCongestionControl):
             slope = 500
             sine_component = math.sin(2 * math.pi * self._frequency * delta_t)
             amplitude = (
-                self._base_cwnd * 0.25 * (1 if sine_component < 0 else 1)
+                self._base_cwnd
+                * self._base_to_amplitude_ratio
+                * (1 if sine_component < 0 else 1)
             )  # no effect
             if self._operation_state == OperationState.INCREASE:
                 self._base_cwnd += slope
             if self._operation_state == OperationState.MITIGATION:
-                self._base_cwnd = self._analyzer_unit.get_bdp_estimate() * 0.95
+                self._base_cwnd = self._analyzer_unit.get_bdp_estimate() * 0.9
                 print(self._base_cwnd)
             if self._operation_state == OperationState.STABLE:
                 x = 1  # only to have a visible case, cwnd_base doesnt chan
@@ -130,6 +145,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
                 self.congestion_window,
                 self.acked_bytes_in_interval,
                 self.latest_rtt,
+                self._base_cwnd,
             )
             self.socket.send_json(timestamp)
             self._analyzer_unit.input_queue.append(timestamp)
@@ -140,7 +156,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
     def on_packet_acked(self, *, now: float, packet: QuicSentPacket) -> None:
         self.bytes_in_flight -= packet.sent_bytes
         self.acked_bytes_in_interval += packet.sent_bytes * (
-            0.1 / self.sampling_interval
+            self.rtt_estimate / self.sampling_interval
         )
         """if packet.sent_time <= self._congestion_recovery_start_time:
             return
@@ -165,7 +181,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
             self.bytes_in_flight -= packet.sent_bytes
 
     def on_packets_lost(self, *, now: float, packets: Iterable[QuicSentPacket]) -> None:
-        print("LOSS")
+        # print("LOSS")
         lost_largest_time = 0.0
         for packet in packets:
             self.bytes_in_flight -= packet.sent_bytes

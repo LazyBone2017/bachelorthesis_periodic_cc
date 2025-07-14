@@ -16,7 +16,7 @@ async def provider(queue, data_rate=1, iterations=1):
     while True:
         data = f"Data {counter}".ljust(chunk_size, "X")
         await queue.put(data)
-        print(f"[provider] Pushed: Data {counter} ({len(data)} bytes)")
+        # print(f"[provider] Pushed: Data {counter} ({len(data)} bytes)")
 
         counter += 1
         if (

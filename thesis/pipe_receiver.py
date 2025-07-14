@@ -21,16 +21,19 @@ from analyzer_unit import AnalyzerUnit
 
 
 # data_queue = deque(maxlen=1000)
-_analyzer_unit = AnalyzerUnit(sampling_rate=5, modulation_frequency=1)
-save_log = []
+_analyzer_unit = AnalyzerUnit(sampling_rate=10, modulation_frequency=1)
+save_log = deque()
 
 
-fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(19.2, 10.8), dpi=100)
+fig, (ax1, ax2, ax3, ax4) = plt.subplots(
+    4, 1, figsize=(19.2 * 0.8, 10.8 * 0.8), dpi=100
+)
 plt.subplots_adjust(bottom=0.2)
 (line1,) = ax1.plot([], [])
+(line1b,) = ax1.plot([], [])
 (line2a,) = ax2.plot([], [], label="Acked Bytes")
 (line2b,) = ax2.plot([], [], label="Acked Bytes Filtered", color="red")
-(line2c,) = ax2.plot([], [], label="Acked Bytes Filtered Interpolated", color="green")
+(line2c,) = ax2.plot([], [], label="Acked Bytes Filtered Interpolated", color="orange")
 """(line2d,) = ax2.plot(
     [], [], label="Acked Bytes Filtered Interpolated Detrended", color="orange"
 )
@@ -40,7 +43,7 @@ plt.subplots_adjust(bottom=0.2)
 (line3a,) = ax3.plot([], [], label="Ratio", color="red")
 (line3b,) = ax3.plot([], [], label="Ratio Avg", color="blue")
 
-(line4,) = ax4.plot([], [], label="FFT")
+(line4,) = ax4.plot([], [], label="Conwin/Response")
 # (line4b,) = ax4.plot([], [], label="Savgol Hanning 0-Pad FFT", color="red")
 
 
@@ -95,6 +98,12 @@ def clear(event):
     update(True)
 
 
+def on_close(event):
+    print("Figure closed — cleaning up...")
+    stop_client()
+
+
+fig.canvas.mpl_connect("close_event", on_close)
 start_button_ax = fig.add_axes([0.8, 0.05, 0.1, 0.075])
 start_button = Button(start_button_ax, "Run / Stop)")
 start_button.on_clicked(handle_start_button)
@@ -172,11 +181,12 @@ def peakFormed(
 
 def update(i):
     _analyzer_unit.update_processing()
+
     line1.set_data(_analyzer_unit._delta_t, _analyzer_unit._congwin)
     line2a.set_data(_analyzer_unit._delta_t, _analyzer_unit._raw_acks)
     line2b.set_data(_analyzer_unit._delta_t, _analyzer_unit._filtered_acks)
     line3a.set_data(_analyzer_unit._delta_t, _analyzer_unit._rtts)
-    # line2c.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._interpolated_acks)
+    line2c.set_ydata(_analyzer_unit._interpolated_acks)
     """line2d.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._detrended_acks)
     line2e.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._windowed_acks)"""
     """line3a.set_data(
@@ -185,6 +195,21 @@ def update(i):
     )
 
     line4.set_data(_analyzer_unit._fft_freqs, _analyzer_unit._fft_magnitudes)"""
+    crr = _analyzer_unit._congwin_to_response_ratio
+    line4.set_data(
+        np.arange(len(crr)),
+        crr,
+    )
+    base = _analyzer_unit._base_cwnd
+    line1b.set_data(
+        _analyzer_unit._delta_t,
+        base,
+    )
+    line2c.set_data(
+        _analyzer_unit._delta_t,
+        base,
+    )
+
     ax1.relim()
     ax1.autoscale_view()
     ax3.relim()
@@ -193,8 +218,9 @@ def update(i):
     ax2.relim()
     ax2.autoscale_view()
     ax4.relim()
-    ax4.set_xlim([0, 3])
+    ax4.set_ylim([0.75, 1.2])
     ax4.autoscale_view()
+
     '''
     if len(data_queue) == 0:
         return

@@ -14,4 +14,4 @@ class ClientProtocol(QuicConnectionProtocol):
         stream_id = self._quic.get_next_available_stream_id()
         self._quic.send_stream_data(stream_id, data.encode(), end_stream=False)
         self.transmit()
-        print(f"[client] Sent data: {len(data)} Bytes")
+        # print(f"[client] Sent data: {len(data)} Bytes")
