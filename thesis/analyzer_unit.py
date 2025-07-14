@@ -53,6 +53,17 @@ class AnalyzerUnit:
                 self._delta_t[0], self._delta_t[-1], 1 / self._sampling_rate
             )
 
+    def get_rtt_estimate(self):
+        if len(self._rtts) != 0:
+            return np.min(self._rtts)
+        else:
+            return 0.5  # fallback, is this good?
+
+    def _calculate_shift_bytes(self):
+        x = self.get_rtt_estimate() * 5000
+        print("SHIFTED", x)
+        return x
+
     def apply_filter(self, window):
         if len(self._acks_in_process) <= 4:
             self._filtered_acks = self._acks_in_process
@@ -149,8 +160,10 @@ class AnalyzerUnit:
         max, _ = scipy.signal.find_peaks(self._acks_in_process)
         response_peak_avg = 0
         if len(self._acks_in_process[max]) != 0:
-            response_peak_avg = np.max(self._acks_in_process[max])
-        
+            response_peak_avg = np.max(
+                self._acks_in_process[max]
+            )  # - self._calculate_shift_bytes()
+
         self._congwin_to_response_ratio.append(response_peak_avg / congwin_peak_avg)
 
     def get_bdp_estimate(self):

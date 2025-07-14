@@ -29,6 +29,7 @@ K_LOSS_REDUCTION_FACTOR = 0.5
 LOG = []
 ACK_BYTES_SUM = 0
 PACKET_LOG = []
+SAVED = False
 
 
 class OperationState(Enum):
@@ -50,8 +51,8 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._congestion_stash = 0
         self._rtt_monitor = QuicRttMonitor()
         self._start_time = time.monotonic()
-        self._base_cwnd = 10000  # baseline in bytes
-        # self.congestion_window = 100000
+        self._base_cwnd = 30000  # baseline in bytes
+        # self.congestion_window = 500000
         # self._amplitude = self._base_cwnd * 0.35  # 0.25
         self._base_to_amplitude_ratio = 0.35
         self._frequency = 1  # how fast it oscillates (in Hz)
@@ -60,6 +61,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self.sampling_interval = 0.1
         self.acked_bytes_in_interval = 0
         self._operation_state = OperationState.STARTUP
+        self.saved = False
 
         self.is_client = is_client
         if is_client:
@@ -81,16 +83,11 @@ class PeriodicCongestionControl(QuicCongestionControl):
     async def control(self):
         while True:
             self._analyzer_unit.update_processing()
-            print("STATE")
             print(self._operation_state)
-            if len(self._analyzer_unit._rtts) != 0:
-                self.rtt_estimate = np.min(self._analyzer_unit._rtts)
-                print(self.rtt_estimate)
+            self.rtt_estimate = self._analyzer_unit.get_rtt_estimate()
             match self._operation_state:
                 case OperationState.STARTUP:
                     # end of startup
-                    print(np.mean(self._analyzer_unit._congwin_to_response_ratio))
-                    print(self._analyzer_unit._congwin_to_response_ratio)
                     if np.mean(self._analyzer_unit._congwin_to_response_ratio) > 0.9:
                         print("SWITCH TO INCREASE")
                         self._operation_state = OperationState.INCREASE
@@ -110,13 +107,13 @@ class PeriodicCongestionControl(QuicCongestionControl):
                         print("SWITCH TO INCREASE")
                         self._operation_state = OperationState.INCREASE
                 case _:
-                    print("ELSE")
+                    print("INVALID OperationState")
             await asyncio.sleep(self.sampling_interval)
 
     async def modulate_congestion_window(self):
         while True:
             delta_t = time.monotonic() - self._start_time
-            slope = 500
+            increase_per_second = 5000
             sine_component = math.sin(2 * math.pi * self._frequency * delta_t)
             amplitude = (
                 self._base_cwnd
@@ -124,10 +121,10 @@ class PeriodicCongestionControl(QuicCongestionControl):
                 * (1 if sine_component < 0 else 1)
             )  # no effect
             if self._operation_state == OperationState.INCREASE:
-                self._base_cwnd += slope
+                self._base_cwnd += increase_per_second / 10
             if self._operation_state == OperationState.MITIGATION:
                 self._base_cwnd = self._analyzer_unit.get_bdp_estimate() * 0.9
-                print(self._base_cwnd)
+                print("SETTING BASE: ", self._base_cwnd)
             if self._operation_state == OperationState.STABLE:
                 x = 1  # only to have a visible case, cwnd_base doesnt chan
 
@@ -135,8 +132,15 @@ class PeriodicCongestionControl(QuicCongestionControl):
 
             self.congestion_window = new_conw
 
-            # set update frequency, inv. proportional to modulation frequency
+            # set update interval proportional to modulation frequency
             await asyncio.sleep(1 / (10 * self._frequency))
+
+    def save_to_csv(self, filename, data):
+        print("CWD:", os.getcwd())
+        with open(filename + ".csv", mode="w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerows(data)
+        print("WRITTEN to file")
 
     async def pass_timestamps(self):
         while True:
@@ -149,6 +153,11 @@ class PeriodicCongestionControl(QuicCongestionControl):
             )
             self.socket.send_json(timestamp)
             self._analyzer_unit.input_queue.append(timestamp)
+            LOG.append(timestamp)
+            if time.monotonic() - self._start_time > 100 and not self.saved:
+                self.save_to_csv("../data_out/data", LOG)
+                self.saved = True
+                print("SAVE")
             self.acked_bytes_in_interval = 0
 
             await asyncio.sleep(self.sampling_interval)

@@ -10,13 +10,13 @@ import asyncio
 
 
 async def provider(queue, data_rate=1, iterations=1):
-    chunk_size = data_rate * 1024 * 1024
+    chunk_size = data_rate * 131072
     counter = 0
 
     while True:
         data = f"Data {counter}".ljust(chunk_size, "X")
         await queue.put(data)
-        # print(f"[provider] Pushed: Data {counter} ({len(data)} bytes)")
+        print(f"[provider] Pushed: Data {counter} ({len(data)} bytes)")
 
         counter += 1
         if (

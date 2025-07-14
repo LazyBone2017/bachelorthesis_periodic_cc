@@ -88,6 +88,7 @@ def stop_client():
 
 def handle_start_button(event):
     if process[0] is None:
+
         run_client()
     else:
         stop_client()
@@ -218,7 +219,7 @@ def update(i):
     ax2.relim()
     ax2.autoscale_view()
     ax4.relim()
-    ax4.set_ylim([0.75, 1.2])
+    ax4.set_ylim([0.75, 1.05])
     ax4.autoscale_view()
 
     '''
