@@ -51,7 +51,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._congestion_stash = 0
         self._rtt_monitor = QuicRttMonitor()
         self._start_time = time.monotonic()
-        self._base_cwnd = 30000  # baseline in bytes
+        self._base_cwnd = 60000  # baseline in bytes
         # self.congestion_window = 500000
         # self._amplitude = self._base_cwnd * 0.35  # 0.25
         self._base_to_amplitude_ratio = 0.35
@@ -90,7 +90,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
                     # end of startup
                     if np.mean(self._analyzer_unit._congwin_to_response_ratio) > 0.9:
                         print("SWITCH TO INCREASE")
-                        self._operation_state = OperationState.INCREASE
+                        # self._operation_state = OperationState.INCREASE
                 case OperationState.INCREASE:
                     if self._analyzer_unit._congwin_to_response_ratio[-1] < 0.75:
                         print("SWITCH TO MITIGATE")
