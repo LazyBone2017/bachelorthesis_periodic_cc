@@ -19,7 +19,7 @@ async def provider(queue, data_rate=1, iterations=1):
         print(f"[provider] Pushed: Data {counter} ({len(payload)} bytes)")
 
         counter += 1
-        if counter > iterations and iterations != 0:
+        if counter > iterations:
             break
         await asyncio.sleep(1)
 
