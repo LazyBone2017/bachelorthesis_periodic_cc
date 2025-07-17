@@ -17,7 +17,7 @@ class QuicClient:
         self.configuration.verify_mode = False
         self.configuration.secrets_log_file = open("secrets.log", "a")
 
-    async def run(self, on_connection_close_callback):
+    async def run(self):
         async with connect(
             self.host,
             self.port,
@@ -40,6 +40,5 @@ class QuicClient:
 
             connection.close()
             await connection.wait_closed()
-            on_connection_close_callback()
 
             print("Client Shutdown.")

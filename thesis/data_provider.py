@@ -12,16 +12,14 @@ import asyncio
 async def provider(queue, data_rate=1, iterations=1):
     chunk_size = data_rate * 131072
     counter = 0
+    payload = "Data".ljust(chunk_size, "X")
 
     while True:
-        data = f"Data {counter}".ljust(chunk_size, "X")
-        await queue.put(data)
-        print(f"[provider] Pushed: Data {counter} ({len(data)} bytes)")
+        await queue.put(payload)
+        print(f"[provider] Pushed: Data {counter} ({len(payload)} bytes)")
 
         counter += 1
-        if (
-            counter > iterations and iterations != 0
-        ):  # iterations == 0 keeps the loop active
+        if counter > iterations:
             break
         await asyncio.sleep(1)
 
