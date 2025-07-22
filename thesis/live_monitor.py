@@ -17,7 +17,7 @@ import scipy
 import scipy.signal
 import zmq
 
-from analyzer_unit import AnalyzerUnit
+from AnalyzerUnit import AnalyzerUnit
 
 
 # data_queue = deque(maxlen=1000)

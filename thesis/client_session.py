@@ -1,19 +1,5 @@
 import asyncio
-import csv
-import os
-import threading
-
-import nicegui
-
-from QuicClient import QuicClient
-from aioquic.quic.congestion.periodic import LOG
-import tkinter as tk
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-import matplotlib.pyplot as plt
-import numpy as np
-from scipy.interpolate import make_splrep, splev
-from nicegui import ui
-
+import QuicClient
 from data_provider import provider
 
 

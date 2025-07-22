@@ -13,8 +13,7 @@ from matplotlib.widgets import TextBox
 import numpy as np
 import zmq
 
-from ModulationAnalyzer import ModulationAnalyzer
-from analyzer_unit import AnalyzerUnit
+from AnalyzerUnit import AnalyzerUnit
 
 from ..packet_builder import QuicSentPacket
 from .base import (
