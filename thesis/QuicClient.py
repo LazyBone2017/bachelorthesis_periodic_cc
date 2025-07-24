@@ -1,4 +1,5 @@
 import asyncio
+import time
 from aioquic.asyncio.client import connect
 from aioquic.quic.configuration import QuicConfiguration
 from ClientProtocol import ClientProtocol
@@ -25,15 +26,16 @@ class QuicClient:
             create_protocol=ClientProtocol,
         ) as connection:
             print("[client] Connected to server.")
+            stream_id = connection._quic.get_next_available_stream_id()
             while True:
-
                 data = await self.queue.get()
+
                 if data is None:
                     print("[client] Provider stopped data stream, closing stream.")
-                    connection._quic.send_stream_data(0, b"", end_stream=True)
+                    connection._quic.send_stream_data(stream_id, b"", end_stream=True)
                     connection.transmit()
                     break
-                await connection.send_data(data)
+                await connection.send_data(stream_id, data)
                 await asyncio.sleep(0)
 
             print("All done. Connection is being closed...")

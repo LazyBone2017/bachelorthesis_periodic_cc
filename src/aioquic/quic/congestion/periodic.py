@@ -51,17 +51,18 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._rtt_monitor = QuicRttMonitor()
         self._start_time = time.monotonic()
         self._base_cwnd = 30000  # baseline in bytes
-        # self.congestion_window = 500000
+        # self.congestion_window = 30000
         # self._amplitude = self._base_cwnd * 0.35  # 0.25
-        self._base_to_amplitude_ratio = 0.35
+        self._base_to_amplitude_ratio = 0.25
         self._frequency = 1  # how fast it oscillates (in Hz)
         self.latest_rtt = 0.1
         self.rtt_estimate = 0.1
-        self.sampling_interval = 0.1
+        self.sampling_interval = 0.2
         self.acked_bytes_in_interval = 0
         self.sent_bytes_in_interval = 0
         self._operation_state = OperationState.STARTUP
         self.saved = False
+        self.threshold = 0
 
         self.is_client = is_client
         if is_client:
@@ -73,9 +74,18 @@ class PeriodicCongestionControl(QuicCongestionControl):
             sampling_rate=1 / self.sampling_interval,
         )
 
-        asyncio.create_task(self.modulate_congestion_window())
-        asyncio.create_task(self.pass_timestamps())
-        asyncio.create_task(self.control())
+        mod = asyncio.create_task(self.modulate_congestion_window())
+        mod.add_done_callback(
+            lambda t: print("TASK FINISHED:", t, "EXCEPTION:", t.exception())
+        )
+        t = asyncio.create_task(self.pass_timestamps())
+        t.add_done_callback(
+            lambda t: print("TASK FINISHED:", t, "EXCEPTION:", t.exception())
+        )
+        c = asyncio.create_task(self.control())
+        c.add_done_callback(
+            lambda t: print("TASK FINISHED:", t, "EXCEPTION:", t.exception())
+        )
 
     # RTT shold be determine sampling interval
     # Mod Freq determines modulation interval
@@ -83,24 +93,25 @@ class PeriodicCongestionControl(QuicCongestionControl):
     async def control(self):
         while True:
             self._analyzer_unit.update_processing()
-            print(self._operation_state)
             self.rtt_estimate = self._analyzer_unit.get_rtt_estimate()
             match self._operation_state:
                 case OperationState.STARTUP:
                     # end of startup
                     if np.mean(self._analyzer_unit._congwin_to_response_ratio) > 0.9:
                         print("SWITCH TO INCREASE")
-                        # self._operation_state = OperationState.INCREASE
+                        self._operation_state = OperationState.INCREASE
                 case OperationState.INCREASE:
-                    if self._analyzer_unit._congwin_to_response_ratio[-1] < 0.75:
+                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) < 0.8525:
                         print("SWITCH TO MITIGATE")
                         self._operation_state = OperationState.MITIGATION
                 case OperationState.MITIGATION:
-                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) >= 0.75:
+                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) >= 0.825:
+                        print("SWITCH TO STABLE")
                         self._operation_state = OperationState.STABLE
                 case OperationState.STABLE:
                     # BDP has decreased
-                    if self._analyzer_unit._congwin_to_response_ratio[-1] < 0.75:
+                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) < 0.825:
+                        print("SWITCH TO MITIGATION")
                         self._operation_state = OperationState.MITIGATION
                         # BDP has increased
                     if np.mean(self._analyzer_unit._congwin_to_response_ratio) > 0.9:
@@ -119,11 +130,12 @@ class PeriodicCongestionControl(QuicCongestionControl):
             increase_per_second = 5000
             sine_component = math.sin(2 * math.pi * self._frequency * delta_t)
             sine_component = self.rect_mod(sine_component)
+            # sine_component = 0
             amplitude = self._base_cwnd * self._base_to_amplitude_ratio  # no effect
             if self._operation_state == OperationState.INCREASE:
                 self._base_cwnd += increase_per_second / 10
             if self._operation_state == OperationState.MITIGATION:
-                self._base_cwnd = self._analyzer_unit.get_bdp_estimate() * 0.9
+                self._base_cwnd = self._analyzer_unit.get_bdp_estimate() * 0.95
                 print("SETTING BASE: ", self._base_cwnd)
             if self._operation_state == OperationState.STABLE:
                 x = 1  # only to have a visible case, cwnd_base doesnt chan
@@ -144,8 +156,12 @@ class PeriodicCongestionControl(QuicCongestionControl):
 
     async def pass_timestamps(self):
         while True:
+            delta_t = time.monotonic() - self._start_time
+            if delta_t > self.threshold:
+                print("----Running for", self.threshold, "s----")
+                self.threshold += 30
             timestamp = (
-                time.monotonic() - self._start_time,
+                delta_t,
                 self.congestion_window,
                 self.acked_bytes_in_interval,
                 self.latest_rtt,
@@ -155,7 +171,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
             self.socket.send_json(timestamp)
             self._analyzer_unit.input_queue.append(timestamp)
             LOG.append(timestamp)
-            if time.monotonic() - self._start_time > 100 and not self.saved:
+            if delta_t > 600 and not self.saved:
                 self.save_to_csv("../data_out/data", LOG)
                 self.saved = True
                 print("SAVE")
@@ -185,7 +201,9 @@ class PeriodicCongestionControl(QuicCongestionControl):
 
     def on_packet_sent(self, *, packet: QuicSentPacket) -> None:
         self.bytes_in_flight += packet.sent_bytes
-        self.sent_bytes_in_interval += packet.sent_bytes
+        self.sent_bytes_in_interval += packet.sent_bytes * (
+            self.rtt_estimate / self.sampling_interval
+        )
 
     def on_packets_expired(self, *, packets: Iterable[QuicSentPacket]) -> None:
         print("Expired")
@@ -193,7 +211,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
             self.bytes_in_flight -= packet.sent_bytes
 
     def on_packets_lost(self, *, now: float, packets: Iterable[QuicSentPacket]) -> None:
-        # print("LOSS")
+        print("LOSS")
         lost_largest_time = 0.0
         for packet in packets:
             self.bytes_in_flight -= packet.sent_bytes
