@@ -50,7 +50,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._congestion_stash = 0
         self._rtt_monitor = QuicRttMonitor()
         self._start_time = time.monotonic()
-        self._base_cwnd = 60000  # baseline in bytes
+        self._base_cwnd = 30000  # baseline in bytes
         # self.congestion_window = 500000
         # self._amplitude = self._base_cwnd * 0.35  # 0.25
         self._base_to_amplitude_ratio = 0.35
@@ -59,6 +59,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self.rtt_estimate = 0.1
         self.sampling_interval = 0.1
         self.acked_bytes_in_interval = 0
+        self.sent_bytes_in_interval = 0
         self._operation_state = OperationState.STARTUP
         self.saved = False
 
@@ -109,16 +110,16 @@ class PeriodicCongestionControl(QuicCongestionControl):
                     print("INVALID OperationState")
             await asyncio.sleep(self.sampling_interval)
 
+    def rect_mod(self, sine):
+        return 1 if sine >= 0 else -1
+
     async def modulate_congestion_window(self):
         while True:
             delta_t = time.monotonic() - self._start_time
             increase_per_second = 5000
             sine_component = math.sin(2 * math.pi * self._frequency * delta_t)
-            amplitude = (
-                self._base_cwnd
-                * self._base_to_amplitude_ratio
-                * (1 if sine_component < 0 else 1)
-            )  # no effect
+            sine_component = self.rect_mod(sine_component)
+            amplitude = self._base_cwnd * self._base_to_amplitude_ratio  # no effect
             if self._operation_state == OperationState.INCREASE:
                 self._base_cwnd += increase_per_second / 10
             if self._operation_state == OperationState.MITIGATION:
@@ -128,7 +129,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
                 x = 1  # only to have a visible case, cwnd_base doesnt chan
 
             new_conw = int(self._base_cwnd + amplitude * sine_component)
-
+            increase_per_second = 5000
             self.congestion_window = new_conw
 
             # set update interval proportional to modulation frequency
@@ -149,6 +150,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
                 self.acked_bytes_in_interval,
                 self.latest_rtt,
                 self._base_cwnd,
+                self.sent_bytes_in_interval,
             )
             self.socket.send_json(timestamp)
             self._analyzer_unit.input_queue.append(timestamp)
@@ -158,6 +160,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
                 self.saved = True
                 print("SAVE")
             self.acked_bytes_in_interval = 0
+            self.sent_bytes_in_interval = 0
 
             await asyncio.sleep(self.sampling_interval)
 
@@ -182,6 +185,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
 
     def on_packet_sent(self, *, packet: QuicSentPacket) -> None:
         self.bytes_in_flight += packet.sent_bytes
+        self.sent_bytes_in_interval += packet.sent_bytes
 
     def on_packets_expired(self, *, packets: Iterable[QuicSentPacket]) -> None:
         print("Expired")

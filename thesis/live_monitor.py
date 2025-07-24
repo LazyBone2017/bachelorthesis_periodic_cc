@@ -31,6 +31,7 @@ fig, (ax1, ax2, ax3, ax4) = plt.subplots(
 plt.subplots_adjust(bottom=0.2)
 (line1,) = ax1.plot([], [])
 (line1b,) = ax1.plot([], [])
+(line1c,) = ax1.plot([], [], label="Sent_bytes", color="red")
 (line2a,) = ax2.plot([], [], label="Acked Bytes")
 (line2b,) = ax2.plot([], [], label="Acked Bytes Filtered", color="red")
 (line2c,) = ax2.plot([], [], label="Acked Bytes Filtered Interpolated", color="orange")
@@ -184,6 +185,7 @@ def update(i):
     _analyzer_unit.update_processing()
 
     line1.set_data(_analyzer_unit._delta_t, _analyzer_unit._congwin)
+    line1c.set_data(_analyzer_unit._delta_t, _analyzer_unit._sent_bytes)
     line2a.set_data(_analyzer_unit._delta_t, _analyzer_unit._raw_acks)
     line2b.set_data(_analyzer_unit._delta_t, _analyzer_unit._filtered_acks)
     line3a.set_data(_analyzer_unit._delta_t, _analyzer_unit._rtts)

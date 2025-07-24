@@ -19,6 +19,7 @@ class AnalyzerUnit:
         self._raw_acks = [0] * self.input_queue.maxlen
         self._congwin = [0] * self.input_queue.maxlen
         self._ack_rate = [0] * self.input_queue.maxlen
+        self._sent_bytes = [0] * self.input_queue.maxlen
 
         self._delta_t_uniform = [0] * self.input_queue.maxlen
         self._filtered_acks = [0] * self.input_queue.maxlen
@@ -176,10 +177,16 @@ class AnalyzerUnit:
     def update_processing(self):
         if len(self.input_queue) == 0:
             return
-        self._delta_t, congwin, self._raw_acks, latest_rtt, conwin_base = zip(
-            *self.input_queue
-        )
+        (
+            self._delta_t,
+            congwin,
+            self._raw_acks,
+            latest_rtt,
+            conwin_base,
+            sent_bytes,
+        ) = zip(*self.input_queue)
         self._congwin = np.array(congwin)
+        self._sent_bytes = np.array(sent_bytes)
         self._acks_in_process = np.array(self._raw_acks)
         self.update_rtt(latest_rtt)
         self._rtts = latest_rtt
