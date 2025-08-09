@@ -1,0 +1,14 @@
+version = 1
+
+[cca]
+name = "periodic"
+
+
+[monitor]
+sampling_hz = 5
+fields = ["congestion_window", "acked_byte", "sent_byte", "rtt_estimate", "cwnd_base"]
+units = ["byte", "byte", "byte", "s", "byte"]
+
+[out]
+out_after = 300
+file = ""
