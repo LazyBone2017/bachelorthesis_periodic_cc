@@ -52,7 +52,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._congestion_stash = 0
         self._rtt_monitor = QuicRttMonitor()
         self._start_time = time.monotonic()
-        self._base_cwnd = 30000  # baseline in bytes
+        self._base_cwnd = 1200  # baseline in bytes
         # self.congestion_window = 120000
         # self._amplitude = self._base_cwnd * 0.35  # 0.25
         self._base_to_amplitude_ratio = 0.25
@@ -67,10 +67,8 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self.threshold = 0
         self.is_client = is_client
         self.logger = TimestampLogger.TimestampLogger(
-            1 / self.sampling_interval, self.is_client
+            1 / self.sampling_interval, self.is_client, self.is_client
         )
-
-        self.is_client = is_client
 
         self._analyzer_unit = AnalyzerUnit(
             modulation_frequency=self._frequency,
@@ -116,6 +114,11 @@ class PeriodicCongestionControl(QuicCongestionControl):
     def reset_sent_byte(self):
         self.sent_bytes_in_interval = 0
 
+    def get_cwnd_base_next_step(self):
+        return self._base_cwnd * (
+            1 + 2 * math.pi * self._base_to_amplitude_ratio * self._frequency * 0.01
+        )
+
     async def control(self):
         while True:
             self._analyzer_unit.update_processing()
@@ -125,7 +128,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
                     # end of startup
                     if np.mean(self._analyzer_unit._congwin_to_response_ratio) > 0.95:
                         print("SWITCH TO INCREASE", flush=True)
-                        # self._operation_state = OperationState.INCREASE
+                        self._operation_state = OperationState.INCREASE
                 case OperationState.INCREASE:
                     if np.mean(self._analyzer_unit._congwin_to_response_ratio) < 0.8525:
                         print("SWITCH TO MITIGATE", flush=True)
@@ -161,13 +164,12 @@ class PeriodicCongestionControl(QuicCongestionControl):
     async def modulate_congestion_window(self):
         while True:
             delta_t = time.monotonic() - self._start_time
-            increase_per_second = 5000
             sine_component = math.sin(2 * math.pi * self._frequency * delta_t)
-            sine_component = self.rect_mod(sine_component)
+            # sine_component = self.rect_mod(sine_component)
             # sine_component = 0
             amplitude = self._base_cwnd * self._base_to_amplitude_ratio  # no effect
             if self._operation_state == OperationState.INCREASE:
-                self._base_cwnd += increase_per_second / 10
+                self._base_cwnd = self.get_cwnd_base_next_step()
             if self._operation_state == OperationState.MITIGATION:
                 self._base_cwnd = self.calculate_cwnd_base_from_bdp(
                     self._analyzer_unit.get_bdp_estimate(), cutoff_fraction=0.2

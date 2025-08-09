@@ -33,7 +33,7 @@ class RenoCongestionControl(QuicCongestionControl):
         self.rtt_estimate = 1
         self.sampling_interval = 0.2
         self.logger = TimestampLogger.TimestampLogger(
-            1 / self.sampling_interval, is_client
+            1 / self.sampling_interval, is_client, is_client
         )
 
         self.logger.register_metric("cwnd", lambda: self.congestion_window)

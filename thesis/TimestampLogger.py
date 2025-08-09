@@ -9,7 +9,7 @@ LOG = []
 
 
 class TimestampLogger:
-    def __init__(self, sampling_rate, ui_out=False):
+    def __init__(self, sampling_rate, ui_out=False, file_out=False):
         self.ui_out = ui_out
         if ui_out:
             self.socket = zmq.Context().socket(zmq.PUSH)
