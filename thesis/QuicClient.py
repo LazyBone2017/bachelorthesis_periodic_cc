@@ -1,7 +1,10 @@
 import asyncio
+import time
 from aioquic.asyncio.client import connect
 from aioquic.quic.configuration import QuicConfiguration
 from ClientProtocol import ClientProtocol
+
+N_STREAMS = 10
 
 
 class QuicClient:
@@ -13,6 +16,7 @@ class QuicClient:
             is_client=True,
             alpn_protocols=["hq-29"],
             congestion_control_algorithm="periodic",
+            max_datagram_size=1200,
         )
         self.configuration.verify_mode = False
         self.configuration.secrets_log_file = open("secrets.log", "a")
@@ -25,15 +29,23 @@ class QuicClient:
             create_protocol=ClientProtocol,
         ) as connection:
             print("[client] Connected to server.")
-            while True:
+            streams = []
+            stream_selected = 0
+            for i in range(N_STREAMS):
+                reader, writer = await connection.create_stream()
+                streams.append(writer)
 
+            while True:
                 data = await self.queue.get()
                 if data is None:
                     print("[client] Provider stopped data stream, closing stream.")
-                    connection._quic.send_stream_data(0, b"", end_stream=True)
-                    connection.transmit()
+                    writer.write_eof()
                     break
-                await connection.send_data(data)
+                streams[stream_selected].write(data.encode())
+                await streams[stream_selected].drain()
+                stream_selected = (
+                    0 if stream_selected == N_STREAMS - 1 else stream_selected + 1
+                )
                 await asyncio.sleep(0)
 
             print("All done. Connection is being closed...")

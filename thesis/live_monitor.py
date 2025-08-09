@@ -17,11 +17,11 @@ import scipy
 import scipy.signal
 import zmq
 
-from analyzer_unit import AnalyzerUnit
+from AnalyzerUnit import AnalyzerUnit
 
 
 # data_queue = deque(maxlen=1000)
-_analyzer_unit = AnalyzerUnit(sampling_rate=10, modulation_frequency=1)
+_analyzer_unit = AnalyzerUnit(sampling_rate=5, modulation_frequency=1)
 save_log = deque()
 
 
@@ -31,6 +31,7 @@ fig, (ax1, ax2, ax3, ax4) = plt.subplots(
 plt.subplots_adjust(bottom=0.2)
 (line1,) = ax1.plot([], [])
 (line1b,) = ax1.plot([], [])
+(line1c,) = ax1.plot([], [], label="Sent_bytes", color="red")
 (line2a,) = ax2.plot([], [], label="Acked Bytes")
 (line2b,) = ax2.plot([], [], label="Acked Bytes Filtered", color="red")
 (line2c,) = ax2.plot([], [], label="Acked Bytes Filtered Interpolated", color="orange")
@@ -184,10 +185,11 @@ def update(i):
     _analyzer_unit.update_processing()
 
     line1.set_data(_analyzer_unit._delta_t, _analyzer_unit._congwin)
-    line2a.set_data(_analyzer_unit._delta_t, _analyzer_unit._raw_acks)
+    line1c.set_data(_analyzer_unit._delta_t, _analyzer_unit._sent_bytes)
+    # line2a.set_data(_analyzer_unit._delta_t, _analyzer_unit._raw_acks)
     line2b.set_data(_analyzer_unit._delta_t, _analyzer_unit._filtered_acks)
     line3a.set_data(_analyzer_unit._delta_t, _analyzer_unit._rtts)
-    line2c.set_ydata(_analyzer_unit._interpolated_acks)
+    # line2c.set_ydata(_analyzer_unit._interpolated_acks)
     """line2d.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._detrended_acks)
     line2e.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._windowed_acks)"""
     """line3a.set_data(
@@ -212,14 +214,16 @@ def update(i):
     )
 
     ax1.relim()
+    # ax1.set_ylim(0, 175000)
     ax1.autoscale_view()
     ax3.relim()
-    ax3.set_ylim(0, 0.25)
+    ax3.set_ylim(0, 1.25)
     ax3.autoscale_view()
     ax2.relim()
+    # ax2.set_ylim(0, 175000)
     ax2.autoscale_view()
     ax4.relim()
-    ax4.set_ylim([0.75, 1.05])
+    ax4.set_ylim([0.5, 1.05])
     ax4.autoscale_view()
 
     '''

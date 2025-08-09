@@ -1,0 +1,14 @@
+version = 1
+
+[cca]
+name = "reno"
+
+[monitor]
+sampling_hz = 5
+fields = ["congestion_window", "acked_byte", "sent_byte", "rtt_estimate"]
+units = ["byte", "byte", "byte", "s"]
+
+
+[out]
+out_after = 300
+file = ""

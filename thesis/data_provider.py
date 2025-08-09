@@ -4,23 +4,22 @@ import asyncio
 """
     Simulates an application providing data to the protocol.
     Pushes dummy data into the queue at [data_rate] MB/s.
-
-    For iterations=0, the provider keeps generating data indefinitely
 """
 
 
-async def provider(queue, data_rate=1, iterations=1):
-    chunk_size = data_rate * 131072
+async def provider(queue, data_rate, iterations, subchunks):
+    chunk_size = data_rate * int(125000 / subchunks)
     counter = 0
     payload = "Data".ljust(chunk_size, "X")
 
     while True:
-        await queue.put(payload)
-        print(f"[provider] Pushed: Data {counter} ({len(payload)} bytes)")
+        queue.put_nowait(payload)
+        # print(f"[provider] Pushed: Data {counter} ({len(payload)} bytes)", flush=True)
 
-        counter += 1
-        if counter > iterations:
+        counter += 1 / subchunks
+        if counter >= iterations:
+            print("Finished")
             break
-        await asyncio.sleep(1)
+        await asyncio.sleep(1 / subchunks)
 
     await queue.put(None)

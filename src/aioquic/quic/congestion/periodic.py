@@ -13,8 +13,8 @@ from matplotlib.widgets import TextBox
 import numpy as np
 import zmq
 
-from ModulationAnalyzer import ModulationAnalyzer
-from analyzer_unit import AnalyzerUnit
+from AnalyzerUnit import AnalyzerUnit
+import TimestampLogger
 
 from ..packet_builder import QuicSentPacket
 from .base import (
@@ -23,6 +23,7 @@ from .base import (
     QuicRttMonitor,
     register_congestion_control,
 )
+
 
 K_LOSS_REDUCTION_FACTOR = 0.5
 
@@ -51,116 +52,134 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._congestion_stash = 0
         self._rtt_monitor = QuicRttMonitor()
         self._start_time = time.monotonic()
-        self._base_cwnd = 60000  # baseline in bytes
-        # self.congestion_window = 500000
+        self._base_cwnd = 30000  # baseline in bytes
+        # self.congestion_window = 120000
         # self._amplitude = self._base_cwnd * 0.35  # 0.25
-        self._base_to_amplitude_ratio = 0.35
+        self._base_to_amplitude_ratio = 0.25
         self._frequency = 1  # how fast it oscillates (in Hz)
         self.latest_rtt = 0.1
         self.rtt_estimate = 0.1
-        self.sampling_interval = 0.1
+        self.sampling_interval = 0.2
         self.acked_bytes_in_interval = 0
+        self.sent_bytes_in_interval = 0
         self._operation_state = OperationState.STARTUP
         self.saved = False
+        self.threshold = 0
+        self.is_client = is_client
+        self.logger = TimestampLogger.TimestampLogger(
+            1 / self.sampling_interval, self.is_client
+        )
 
         self.is_client = is_client
-        if is_client:
-            self.socket = zmq.Context().socket(zmq.PUSH)
-            self.socket.connect("tcp://127.0.0.1:5555")
 
         self._analyzer_unit = AnalyzerUnit(
             modulation_frequency=self._frequency,
             sampling_rate=1 / self.sampling_interval,
         )
 
-        asyncio.create_task(self.modulate_congestion_window())
-        asyncio.create_task(self.pass_timestamps())
-        asyncio.create_task(self.control())
+        self.logger.set_direct_out(self._analyzer_unit.add_to_queue)
+
+        self.logger.register_metric("cwnd", lambda: self.congestion_window)
+        self.logger.register_metric(
+            "acked_byte", lambda: self.acked_bytes_in_interval, self.reset_acked_byte
+        )
+        self.logger.register_metric("rtt", lambda: self.rtt_estimate)
+        self.logger.register_metric(
+            "cwnd_base",
+            lambda: self._base_cwnd,
+        )
+        self.logger.register_metric(
+            "sent_byte",
+            lambda: self.sent_bytes_in_interval,
+            cleanup_function=self.reset_sent_byte,
+        )
+
+        mod = asyncio.create_task(self.modulate_congestion_window())
+        mod.add_done_callback(
+            lambda t: print("TASK FINISHED:", t, "EXCEPTION:", t.exception())
+        )
+        t = asyncio.create_task(self.logger.pass_timestamps())
+        t.add_done_callback(
+            lambda t: print("TASK FINISHED:", t, "EXCEPTION:", t.exception())
+        )
+        c = asyncio.create_task(self.control())
+        c.add_done_callback(
+            lambda t: print("TASK FINISHED:", t, "EXCEPTION:", t.exception())
+        )
 
     # RTT shold be determine sampling interval
     # Mod Freq determines modulation interval
 
+    def reset_acked_byte(self):
+        self.acked_bytes_in_interval = 0
+
+    def reset_sent_byte(self):
+        self.sent_bytes_in_interval = 0
+
     async def control(self):
         while True:
             self._analyzer_unit.update_processing()
-            print(self._operation_state)
             self.rtt_estimate = self._analyzer_unit.get_rtt_estimate()
             match self._operation_state:
                 case OperationState.STARTUP:
                     # end of startup
-                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) > 0.9:
-                        print("SWITCH TO INCREASE")
+                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) > 0.95:
+                        print("SWITCH TO INCREASE", flush=True)
                         # self._operation_state = OperationState.INCREASE
                 case OperationState.INCREASE:
-                    if self._analyzer_unit._congwin_to_response_ratio[-1] < 0.75:
-                        print("SWITCH TO MITIGATE")
+                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) < 0.8525:
+                        print("SWITCH TO MITIGATE", flush=True)
                         self._operation_state = OperationState.MITIGATION
                 case OperationState.MITIGATION:
-                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) >= 0.75:
+                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) >= 0.825:
+                        print("SWITCH TO STABLE", flush=True)
                         self._operation_state = OperationState.STABLE
                 case OperationState.STABLE:
                     # BDP has decreased
-                    if self._analyzer_unit._congwin_to_response_ratio[-1] < 0.75:
+                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) < 0.825:
+                        print("SWITCH TO MITIGATION", flush=True)
                         self._operation_state = OperationState.MITIGATION
                         # BDP has increased
-                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) > 0.9:
-                        print("SWITCH TO INCREASE")
+                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) > 0.95:
+                        print("SWITCH TO INCREASE", flush=True)
                         self._operation_state = OperationState.INCREASE
                 case _:
                     print("INVALID OperationState")
             await asyncio.sleep(self.sampling_interval)
+
+    def rect_mod(self, sine):
+        return 1 if sine >= 0 else -1
+
+    def calculate_cwnd_base_from_bdp(self, bdp_estimate, cutoff_fraction):
+        base = bdp_estimate / (
+            1 + self._base_to_amplitude_ratio * (1 - cutoff_fraction)
+        )
+        print("BDP ESTIMATE:", bdp_estimate)
+        print("SETTING BASE: ", self._base_cwnd, flush=True)
+        return base
 
     async def modulate_congestion_window(self):
         while True:
             delta_t = time.monotonic() - self._start_time
             increase_per_second = 5000
             sine_component = math.sin(2 * math.pi * self._frequency * delta_t)
-            amplitude = (
-                self._base_cwnd
-                * self._base_to_amplitude_ratio
-                * (1 if sine_component < 0 else 1)
-            )  # no effect
+            sine_component = self.rect_mod(sine_component)
+            # sine_component = 0
+            amplitude = self._base_cwnd * self._base_to_amplitude_ratio  # no effect
             if self._operation_state == OperationState.INCREASE:
                 self._base_cwnd += increase_per_second / 10
             if self._operation_state == OperationState.MITIGATION:
-                self._base_cwnd = self._analyzer_unit.get_bdp_estimate() * 0.9
-                print("SETTING BASE: ", self._base_cwnd)
+                self._base_cwnd = self.calculate_cwnd_base_from_bdp(
+                    self._analyzer_unit.get_bdp_estimate(), cutoff_fraction=0.2
+                )
             if self._operation_state == OperationState.STABLE:
                 x = 1  # only to have a visible case, cwnd_base doesnt chan
 
             new_conw = int(self._base_cwnd + amplitude * sine_component)
-
             self.congestion_window = new_conw
 
             # set update interval proportional to modulation frequency
             await asyncio.sleep(1 / (10 * self._frequency))
-
-    def save_to_csv(self, filename, data):
-        print("CWD:", os.getcwd())
-        with open(filename + ".csv", mode="w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerows(data)
-        print("WRITTEN to file")
-
-    async def pass_timestamps(self):
-        while True:
-            timestamp = (
-                time.monotonic() - self._start_time,
-                self.congestion_window,
-                self.acked_bytes_in_interval,
-                self.latest_rtt,
-                self._base_cwnd,
-            )
-            self.socket.send_json(timestamp)
-            self._analyzer_unit.input_queue.append(timestamp)
-            LOG.append(timestamp)
-            if time.monotonic() - self._start_time > 100 and not self.saved:
-                self.save_to_csv("../data_out/data", LOG)
-                self.saved = True
-                print("SAVE")
-            self.acked_bytes_in_interval = 0
-
-            await asyncio.sleep(self.sampling_interval)
 
     def on_packet_acked(self, *, now: float, packet: QuicSentPacket) -> None:
         self.bytes_in_flight -= packet.sent_bytes
@@ -183,6 +202,9 @@ class PeriodicCongestionControl(QuicCongestionControl):
 
     def on_packet_sent(self, *, packet: QuicSentPacket) -> None:
         self.bytes_in_flight += packet.sent_bytes
+        self.sent_bytes_in_interval += packet.sent_bytes * (
+            self.rtt_estimate / self.sampling_interval
+        )
 
     def on_packets_expired(self, *, packets: Iterable[QuicSentPacket]) -> None:
         print("Expired")
@@ -190,7 +212,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
             self.bytes_in_flight -= packet.sent_bytes
 
     def on_packets_lost(self, *, now: float, packets: Iterable[QuicSentPacket]) -> None:
-        # print("LOSS")
+        print("LOSS")
         lost_largest_time = 0.0
         for packet in packets:
             self.bytes_in_flight -= packet.sent_bytes
