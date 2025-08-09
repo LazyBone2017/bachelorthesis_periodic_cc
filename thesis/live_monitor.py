@@ -189,7 +189,7 @@ def update(i):
     # line2a.set_data(_analyzer_unit._delta_t, _analyzer_unit._raw_acks)
     line2b.set_data(_analyzer_unit._delta_t, _analyzer_unit._filtered_acks)
     line3a.set_data(_analyzer_unit._delta_t, _analyzer_unit._rtts)
-    line2c.set_ydata(_analyzer_unit._interpolated_acks)
+    # line2c.set_ydata(_analyzer_unit._interpolated_acks)
     """line2d.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._detrended_acks)
     line2e.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._windowed_acks)"""
     """line3a.set_data(

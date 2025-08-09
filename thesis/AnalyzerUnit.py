@@ -41,6 +41,9 @@ class AnalyzerUnit:
             [0] * self.input_queue.maxlen, maxlen=self.input_queue.maxlen
         )
 
+    def add_to_queue(self, entry):
+        self.input_queue.append(entry)
+
     def gen_uniform_delta_t(self, midpoint_aligned):
         if midpoint_aligned:
             # print("----------------------------")

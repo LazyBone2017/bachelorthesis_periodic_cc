@@ -8,7 +8,7 @@ from aioquic.quic.events import StreamDataReceived
 class EchoProtocol(QuicConnectionProtocol):
     def quic_event_received(self, event):
         if isinstance(event, StreamDataReceived):
-            print(f"[server] Received data: {len(event.data)}")
+            print(f"[server] Received data: {len(event.data)}", flush=True)
             # Echo the data back to the sender
             # self._quic.send_stream_data(event.stream_id, event.data, end_stream=True)
             # self.transmit()
