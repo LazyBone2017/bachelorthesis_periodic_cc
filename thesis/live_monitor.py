@@ -21,7 +21,9 @@ from AnalyzerUnit import AnalyzerUnit
 
 
 # data_queue = deque(maxlen=1000)
-_analyzer_unit = AnalyzerUnit(sampling_rate=5, modulation_frequency=1)
+_analyzer_unit = AnalyzerUnit(
+    sampling_rate=5, modulation_frequency=1, base_to_amplitude_ratio=0.25
+)
 save_log = deque()
 
 
@@ -186,10 +188,10 @@ def update(i):
 
     line1.set_data(_analyzer_unit._delta_t, _analyzer_unit._congwin)
     line1c.set_data(_analyzer_unit._delta_t, _analyzer_unit._sent_bytes)
-    # line2a.set_data(_analyzer_unit._delta_t, _analyzer_unit._raw_acks)
+    line2a.set_data(_analyzer_unit._delta_t, _analyzer_unit._raw_acks)
     line2b.set_data(_analyzer_unit._delta_t, _analyzer_unit._filtered_acks)
     line3a.set_data(_analyzer_unit._delta_t, _analyzer_unit._rtts)
-    # line2c.set_ydata(_analyzer_unit._interpolated_acks)
+    line2c.set_ydata(_analyzer_unit._interpolated_acks)
     """line2d.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._detrended_acks)
     line2e.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._windowed_acks)"""
     """line3a.set_data(
@@ -214,16 +216,16 @@ def update(i):
     )
 
     ax1.relim()
-    # ax1.set_ylim(0, 175000)
+    ax1.set_ylim(0, 75000)
     ax1.autoscale_view()
     ax3.relim()
     ax3.set_ylim(0, 1.25)
     ax3.autoscale_view()
     ax2.relim()
-    # ax2.set_ylim(0, 175000)
+    ax2.set_ylim(0, 75000)
     ax2.autoscale_view()
     ax4.relim()
-    ax4.set_ylim([0.5, 1.05])
+    ax4.set_ylim([0, 1])
     ax4.autoscale_view()
 
     '''
