@@ -10,7 +10,8 @@ import scipy.signal
 
 
 class AnalyzerUnit:
-    def __init__(self, sampling_rate, modulation_frequency):
+    def __init__(self, sampling_rate, modulation_frequency, base_to_amplitude_ratio):
+        self.base_to_amplitude_ratio = base_to_amplitude_ratio
         self._sampling_rate = sampling_rate
         self._modulation_frequency = modulation_frequency
         self.input_queue = deque(maxlen=int(sampling_rate / modulation_frequency * 3))
@@ -35,7 +36,7 @@ class AnalyzerUnit:
             [0] * self.input_queue.maxlen, maxlen=self.input_queue.maxlen
         )
         self._congwin_to_response_ratio = deque(
-            [0] * self.input_queue.maxlen, maxlen=self.input_queue.maxlen
+            [1] * self.input_queue.maxlen, maxlen=self.input_queue.maxlen
         )
         self._base_cwnd = deque(
             [0] * self.input_queue.maxlen, maxlen=self.input_queue.maxlen
@@ -63,11 +64,6 @@ class AnalyzerUnit:
         else:
             return 0.5  # fallback, is this good?
 
-    def _calculate_shift_bytes(self):
-        x = self.get_rtt_estimate() * 5000
-        print("SHIFTED", x)
-        return x
-
     def apply_filter(self, window):
         if len(self._acks_in_process) <= 4:
             self._filtered_acks = self._acks_in_process
@@ -85,69 +81,29 @@ class AnalyzerUnit:
         )
         return self._interpolated_acks
 
-    def apply_differential(self):
-        if len(self._acks_in_process) == 0:
+    def generate_congwin_to_response_ratio(self):
+        # empty queues
+        if (
+            self._congwin is None
+            or len(self._congwin) == 0
+            or self._acks_in_process is None
+            or len(self._acks_in_process) == 0
+        ):
+            self._congwin_to_response_ratio.append(0.5)
             return
-        acks_cumsum = np.cumsum(self._acks_in_process)
-        delta_t_diff = np.diff(self._delta_t)
-        acks_cum_diff = np.diff(acks_cumsum)
-        self._ack_rate = (acks_cum_diff / delta_t_diff) / int(1 / 0.1)
-        print("RATE" + str(len(self._ack_rate)))
-        print("----------------------------")
 
-    def apply_detrending(self):
-        if len(self._acks_in_process) == 0:
-            return self._acks_in_process
-        self._detrended_acks = detrend(self._acks_in_process, "linear", axis=0)
-        return self._detrended_acks
-
-    def apply_windowing(self):
-        if len(self._acks_in_process) == 0:
-            self._windowed_acks = self._acks_in_process
-        window = np.hanning(len(self._acks_in_process))
-        self._windowed_acks = self._acks_in_process * window
-        return self._windowed_acks
-
-    def apply_zero_padding(self, factor):
-        if len(self._acks_in_process) == 0:
-            self._padded_acks = self._acks_in_process
-        self._padded_acks = np.pad(
-            self._acks_in_process, (0, len(self._acks_in_process) * factor), "constant"
+        # get max delta values of cwnd and response
+        cwnd_max_diff = max(self._congwin) - self._base_cwnd[-1] * (
+            1 - self.base_to_amplitude_ratio
         )
-        return self._padded_acks
-
-    def generate_fft(self):
-        if len(self._acks_in_process) == 0:
-            return
-        self._fft_magnitudes = np.abs(np.fft.rfft(self._acks_in_process))
-        self._fft_freqs = np.fft.rfftfreq(
-            len(self._acks_in_process), d=1 / self._sampling_rate
+        response_max_diff = max(self._acks_in_process) - self._base_cwnd[-1] * (
+            1 - self.base_to_amplitude_ratio
         )
 
-    def generate_base_to_second_harmonic_ratio(self):
-        if len(self._fft_freqs) == 0:
-            self._base_to_second_harmonic_ratio.append(0)
-            return
-        base_magnitude = self._fft_magnitudes[
-            np.argmin(np.abs(self._fft_freqs - self._modulation_frequency))
-        ]
-        second_harmonic_magnitude = self._fft_magnitudes[
-            np.argmin(np.abs(self._fft_freqs - self._modulation_frequency * 2))
-        ]
-        if base_magnitude == 0:
-            self._base_to_second_harmonic_ratio.append(0)
-            return
+        # overlap %
+        self._congwin_to_response_ratio.append(response_max_diff / cwnd_max_diff)
 
-        self._base_to_second_harmonic_ratio.append(
-            second_harmonic_magnitude / base_magnitude
-        )
-
-    def get_base_to_second_harmonic_ratio(self):
-        if len(self._base_to_second_harmonic_ratio) == 0:
-            return None
-        return self._base_to_second_harmonic_ratio[-1]
-
-    def generate_congwin_to_response_ratio(self, congwin_base):
+    def get_congwin_response_delta(self):
         if self._congwin is None:
             self._congwin_to_response_ratio.append(0)
             return
@@ -164,11 +120,9 @@ class AnalyzerUnit:
         max, _ = scipy.signal.find_peaks(self._acks_in_process)
         response_peak_avg = 0
         if len(self._acks_in_process[max]) != 0:
-            response_peak_avg = np.max(
-                self._acks_in_process[max]
-            )  # - self._calculate_shift_bytes()
+            response_peak_avg = np.max(self._acks_in_process[max])
 
-        self._congwin_to_response_ratio.append(response_peak_avg / congwin_peak_avg)
+        return (congwin_peak_avg) - (response_peak_avg)
 
     def get_bdp_estimate(self):
         if len(self._acks_in_process) == 0:
@@ -201,14 +155,7 @@ class AnalyzerUnit:
 
         self._acks_in_process = self.apply_filter(window=4)
         self._acks_in_process = self.apply_interpolation()
-        self.generate_congwin_to_response_ratio(conwin_base)
-        # self.apply_differential()
-        # self._acks_in_process = self.apply_detrending()
-        # self._acks_in_process = self.apply_windowing()
-        # self._acks_in_process = self.apply_zero_padding(factor=4)
-
-        # self.generate_fft()
-        # self.generate_base_to_second_harmonic_ratio()
+        self.generate_congwin_to_response_ratio()
 
     # TODO average this in a probing manner for later
     def update_rtt(self, latest_rtt):
