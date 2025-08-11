@@ -46,21 +46,26 @@ class PeriodicCongestionControl(QuicCongestionControl):
     New Periodic congestion control.
     """
 
-    def __init__(self, *, max_datagram_size: int, is_client=False) -> None:
+    def __init__(
+        self, *, max_datagram_size: int, is_client=False, external_config
+    ) -> None:
         super().__init__(max_datagram_size=max_datagram_size)
         self._max_datagram_size = max_datagram_size
         self._congestion_recovery_start_time = 0.0
         self._congestion_stash = 0
         self._rtt_monitor = QuicRttMonitor()
         self._start_time = time.monotonic()
-        self._base_cwnd = 1200  # baseline in bytes
-        # self.congestion_window = 120000
-        # self._amplitude = self._base_cwnd * 0.35  # 0.25
-        self._base_to_amplitude_ratio = 0.25
-        self._frequency = 1  # how fast it oscillates (in Hz)
+
+        self._base_cwnd = float(external_config["cca"]["cwnd_base_0"])
+        self._base_to_amplitude_ratio = float(
+            external_config["cca"]["base_to_amplitude_ratio"]
+        )
+        self._frequency = float(external_config["cca"]["mod_rate"])
+        self.sampling_interval = 1 / float(external_config["cca"]["sampling_rate"])
+
         self.rtt_estimate = 0.1
-        self.latest_rtt = 0.1
-        self.sampling_interval = 0.2
+        self.latest_rtt = 0.05
+
         self.acked_bytes_in_interval = 0
         self.sent_bytes_in_interval = 0
         self._operation_state = OperationState.INCREASE
@@ -69,7 +74,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self.threshold = 0
         self.is_client = is_client
         self.logger = TimestampLogger.TimestampLogger(
-            1 / self.sampling_interval, self.is_client, self.is_client, self.is_client
+            ui_out=True, is_client=is_client, external_config=external_config
         )
 
         self._analyzer_unit = AnalyzerUnit(
@@ -107,6 +112,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
         c.add_done_callback(
             lambda t: print("TASK FINISHED:", t, "EXCEPTION:", t.exception())
         )
+        print("config read @periodic")
 
     # RTT shold be determine sampling interval
     # Mod Freq determines modulation interval

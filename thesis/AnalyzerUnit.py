@@ -92,6 +92,7 @@ class AnalyzerUnit:
             self._congwin_to_response_ratio.append(0.5)
             return
 
+
         # get max delta values of cwnd and response
         cwnd_max_diff = max(self._congwin) - self._base_cwnd[-1] * (
             1 - self.base_to_amplitude_ratio

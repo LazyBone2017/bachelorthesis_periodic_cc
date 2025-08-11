@@ -19,7 +19,9 @@ class RenoCongestionControl(QuicCongestionControl):
     New Reno congestion control.
     """
 
-    def __init__(self, *, max_datagram_size: int, is_client=False) -> None:
+    def __init__(
+        self, *, max_datagram_size: int, is_client=False, external_config
+    ) -> None:
         super().__init__(max_datagram_size=max_datagram_size)
         self._max_datagram_size = max_datagram_size
         self._congestion_recovery_start_time = 0.0
@@ -32,25 +34,29 @@ class RenoCongestionControl(QuicCongestionControl):
         self.sent_bytes_in_interval = 0
         self.rtt_estimate = 1
         self.sampling_interval = 0.2
-        self.logger = TimestampLogger.TimestampLogger(
-            1 / self.sampling_interval, is_client, is_client
-        )
 
-        self.logger.register_metric("cwnd", lambda: self.congestion_window)
-        self.logger.register_metric(
-            "acked_byte", lambda: self.acked_bytes_in_interval, self.reset_acked_byte
-        )
-        self.logger.register_metric("rtt", lambda: self.rtt_estimate)
-        self.logger.register_metric(
-            "sent_byte",
-            lambda: self.sent_bytes_in_interval,
-            cleanup_function=self.reset_sent_byte,
-        )
+        if is_client:
+            self.logger = TimestampLogger.TimestampLogger(
+                1 / self.sampling_interval, is_client, is_client
+            )
 
-        t = asyncio.create_task(self.logger.pass_timestamps())
-        t.add_done_callback(
-            lambda t: print("TASK FINISHED:", t, "EXCEPTION:", t.exception())
-        )
+            self.logger.register_metric("cwnd", lambda: self.congestion_window)
+            self.logger.register_metric(
+                "acked_byte",
+                lambda: self.acked_bytes_in_interval,
+                self.reset_acked_byte,
+            )
+            self.logger.register_metric("rtt", lambda: self.rtt_estimate)
+            self.logger.register_metric(
+                "sent_byte",
+                lambda: self.sent_bytes_in_interval,
+                cleanup_function=self.reset_sent_byte,
+            )
+
+            t = asyncio.create_task(self.logger.pass_timestamps())
+            t.add_done_callback(
+                lambda t: print("TASK FINISHED:", t, "EXCEPTION:", t.exception())
+            )
 
     def reset_acked_byte(self):
         self.acked_bytes_in_interval = 0

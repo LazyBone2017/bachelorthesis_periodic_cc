@@ -4,6 +4,7 @@ import signal
 import subprocess
 import threading
 import time
+import tomllib
 from matplotlib import pyplot as plt
 from matplotlib import animation
 from matplotlib.widgets import Button
@@ -12,10 +13,15 @@ import zmq
 
 from AnalyzerUnit import AnalyzerUnit
 
+config = None
+with open("config_periodic.toml", "rb") as f:
+    config = tomllib.load(f)
+    print("config read @monitor")
 
-# data_queue = deque(maxlen=1000)
 _analyzer_unit = AnalyzerUnit(
-    sampling_rate=5, modulation_frequency=1, base_to_amplitude_ratio=0.25
+    sampling_rate=float(config["cca"]["sampling_rate"]),
+    modulation_frequency=float(config["cca"]["mod_rate"]),
+    base_to_amplitude_ratio=float(config["cca"]["base_to_amplitude_ratio"]),
 )
 save_log = deque()
 
@@ -166,13 +172,13 @@ def update(i):
     )
 
     ax1.relim()
-    ax1.set_ylim(0, 75000)
+    ax1.set_ylim(0, 500000)
     ax1.autoscale_view()
     ax3.relim()
     ax3.set_ylim(0, 1.25)
     ax3.autoscale_view()
     ax2.relim()
-    ax2.set_ylim(0, 75000)
+    ax2.set_ylim(0, 500000)
     ax2.autoscale_view()
     ax4.relim()
     ax4.set_ylim([0, 1])

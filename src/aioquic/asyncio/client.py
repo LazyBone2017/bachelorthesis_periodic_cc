@@ -23,6 +23,7 @@ async def connect(
     token_handler: Optional[QuicTokenHandler] = None,
     wait_connected: bool = True,
     local_port: int = 0,
+    external_config,
 ) -> AsyncGenerator[QuicConnectionProtocol, None]:
     """
     Connect to a QUIC server at the given `host` and `port`.
@@ -69,6 +70,7 @@ async def connect(
         configuration=configuration,
         session_ticket_handler=session_ticket_handler,
         token_handler=token_handler,
+        external_config=external_config,
     )
 
     # explicitly enable IPv4/IPv6 dual stack

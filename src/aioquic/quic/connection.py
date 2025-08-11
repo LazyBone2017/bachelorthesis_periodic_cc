@@ -257,6 +257,7 @@ class QuicConnection:
         session_ticket_fetcher: Optional[tls.SessionTicketFetcher] = None,
         session_ticket_handler: Optional[tls.SessionTicketHandler] = None,
         token_handler: Optional[QuicTokenHandler] = None,
+        external_config=None,
     ) -> None:
         assert configuration.max_datagram_size >= SMALLEST_MAX_DATAGRAM_SIZE, (
             "The smallest allowed maximum datagram size is "
@@ -402,6 +403,7 @@ class QuicConnection:
             send_probe=self._send_probe,
             logger=self._logger,
             is_client=configuration.is_client,
+            external_config=external_config,
         )
 
         # things to send

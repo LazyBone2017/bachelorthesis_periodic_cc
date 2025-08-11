@@ -94,6 +94,7 @@ class QuicPacketRecovery:
         logger: Optional[logging.LoggerAdapter] = None,
         quic_logger: Optional[QuicLoggerTrace] = None,
         is_client=False,
+        external_config,
     ) -> None:
         self.max_ack_delay = 0.025
         self.peer_completed_address_validation = peer_completed_address_validation
@@ -119,6 +120,7 @@ class QuicPacketRecovery:
             congestion_control_algorithm,
             max_datagram_size=max_datagram_size,
             is_client=is_client,
+            external_config=external_config,
         )
         self._pacer = QuicPacketPacer(max_datagram_size=max_datagram_size)
 

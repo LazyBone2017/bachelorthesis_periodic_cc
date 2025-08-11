@@ -2,13 +2,17 @@ version = 1
 
 [cca]
 name = "periodic"
-
-
-[monitor]
-sampling_hz = 5
-fields = ["congestion_window", "acked_byte", "sent_byte", "rtt_estimate", "cwnd_base"]
+mod_rate = 1
+cwnd_base_0 = 1200
+base_to_amplitude_ratio = 0.25
+sampling_rate = 10
+metrics = ["congestion_window", "acked_byte", "sent_byte", "rtt_estimate", "cwnd_base"]
 units = ["byte", "byte", "byte", "s", "byte"]
 
 [out]
-out_after = 300
-file = ""
+out_after = 20
+filename = "data_output"
+
+[provider]
+rate_mbit = 10
+granularity = 10
