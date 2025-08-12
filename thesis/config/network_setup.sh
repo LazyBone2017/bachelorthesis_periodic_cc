@@ -37,8 +37,8 @@ function setup() {
     ip netns exec $NS2 ip route add default via $IP1 dev $VETH2
 
     echo "[+] Applying traffic control: delay=$DELAY, loss=$LOSS, rate=$RATE"
-    ip netns exec $NS1 tc qdisc add dev $VETH1 root netem delay $DELAY loss $LOSS rate $RATE limit 400
-    ip netns exec $NS2 tc qdisc add dev $VETH2 root netem delay $DELAY loss $LOSS rate $RATE limit 400
+    ip netns exec $NS1 tc qdisc add dev $VETH1 root netem delay $DELAY loss $LOSS rate $RATE limit 200
+    ip netns exec $NS2 tc qdisc add dev $VETH2 root netem delay $DELAY loss $LOSS rate $RATE limit 200
 
 
     echo ""

@@ -5,12 +5,12 @@ name = "periodic"
 mod_rate = 1
 cwnd_base_0 = 1200
 base_to_amplitude_ratio = 0.25
-sampling_rate = 10
+sampling_rate = 5
 metrics = ["congestion_window", "acked_byte", "sent_byte", "rtt_estimate", "cwnd_base"]
 units = ["byte", "byte", "byte", "s", "byte"]
 
 [out]
-out_after = 20
+out_after = 300
 filename = "data_output"
 
 [provider]

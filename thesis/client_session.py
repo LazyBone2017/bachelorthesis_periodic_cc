@@ -20,7 +20,7 @@ async def main():
     )
 
     provider_task = asyncio.create_task(
-        provider(send_data_queue, data_rate=60, iterations=650, subchunks=1000)
+        provider(send_data_queue, data_rate=30, iterations=650, subchunks=1000)
     )
     client_task = asyncio.create_task(client.run())
 

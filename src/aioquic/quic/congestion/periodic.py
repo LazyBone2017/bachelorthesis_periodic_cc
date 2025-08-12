@@ -187,7 +187,8 @@ class PeriodicCongestionControl(QuicCongestionControl):
 
             # sine_component = self.rect_mod(sine_component)
             amplitude = self._base_cwnd * self._base_to_amplitude_ratio
-
+            if sine_component < 0:
+                amplitude * 1.25
             self.congestion_window = int(self._base_cwnd + amplitude * sine_component)
 
             # set update interval proportional to modulation frequency
