@@ -40,6 +40,7 @@ plt.subplots_adjust(bottom=0.2)
 (line3b,) = ax3.plot([], [], label="Ratio Avg", color="blue")
 
 (line4,) = ax4.plot([], [], label="Conwin/Response")
+(line4b,) = ax4.plot([], [], label="Lost Byte % x10")
 # (line4b,) = ax4.plot([], [], label="Savgol Hanning 0-Pad FFT", color="red")
 
 
@@ -155,6 +156,10 @@ def update(i):
         np.arange(len(crr)),
         crr,
     )
+    line4b.set_data(
+        np.arange(len(_analyzer_unit._loss_rate)),
+        np.array(_analyzer_unit._loss_rate) * 10,
+    )
     base = _analyzer_unit._base_cwnd
     line1b.set_data(
         _analyzer_unit._delta_t,
@@ -166,13 +171,13 @@ def update(i):
     )
 
     ax1.relim()
-    ax1.set_ylim(0, 75000)
+    ax1.set_ylim(0, 175000)
     ax1.autoscale_view()
     ax3.relim()
     ax3.set_ylim(0, 1.25)
     ax3.autoscale_view()
     ax2.relim()
-    ax2.set_ylim(0, 75000)
+    ax2.set_ylim(0, 175000)
     ax2.autoscale_view()
     ax4.relim()
     ax4.set_ylim([0, 1])

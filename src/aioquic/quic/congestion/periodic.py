@@ -56,13 +56,14 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._base_cwnd = 1200  # baseline in bytes
         # self.congestion_window = 120000
         # self._amplitude = self._base_cwnd * 0.35  # 0.25
-        self._base_to_amplitude_ratio = 0.25
+        self._base_to_amplitude_ratio = 0.15
         self._frequency = 1  # how fast it oscillates (in Hz)
         self.rtt_estimate = 0.1
         self.latest_rtt = 0.1
         self.sampling_interval = 0.2
         self.acked_bytes_in_interval = 0
         self.sent_bytes_in_interval = 0
+        self.lost_byte_in_interval = 0
         self._operation_state = OperationState.INCREASE
         self.state_start_t = time.monotonic()
         self.saved = False
@@ -94,6 +95,11 @@ class PeriodicCongestionControl(QuicCongestionControl):
             lambda: self.sent_bytes_in_interval,
             cleanup_function=self.reset_sent_byte,
         )
+        self.logger.register_metric(
+            "lost_byte",
+            lambda: self.lost_byte_in_interval,
+            cleanup_function=self.reset_lost_byte,
+        )
 
         mod = asyncio.create_task(self.modulate_congestion_window())
         mod.add_done_callback(
@@ -116,6 +122,9 @@ class PeriodicCongestionControl(QuicCongestionControl):
 
     def reset_sent_byte(self):
         self.sent_bytes_in_interval = 0
+
+    def reset_lost_byte(self):
+        self.lost_byte_in_interval = 0
 
     def get_cwnd_base_next_step(self):
         next = self._base_cwnd * (
@@ -154,6 +163,11 @@ class PeriodicCongestionControl(QuicCongestionControl):
                     print("BASE SET TO:", self._base_cwnd)
                     self.change_operation_state(OperationState.SENSE)
                 case OperationState.SENSE:
+                    self.rtt_estimate = self._analyzer_unit.get_rtt_estimate()
+                    self._base_to_amplitude_ratio = (
+                        self._analyzer_unit.get_base_to_amplitude_ratio("SENSE")
+                    )
+
                     if (
                         time.monotonic() - self.state_start_t
                         > self._analyzer_unit.input_queue.maxlen
@@ -210,6 +224,9 @@ class PeriodicCongestionControl(QuicCongestionControl):
         for packet in packets:
             self.bytes_in_flight -= packet.sent_bytes
             lost_largest_time = packet.sent_time
+            self.lost_byte_in_interval += packet.sent_bytes * (
+                self.rtt_estimate / self.sampling_interval
+            )
 
     def on_rtt_measurement(self, *, now: float, rtt: float) -> None:
         # check whether we should exit slow start
