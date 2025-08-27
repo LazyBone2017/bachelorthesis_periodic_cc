@@ -10,7 +10,7 @@ async def main():
     client = QuicClient.QuicClient("10.0.0.2", 4433, send_data_queue)
 
     provider_task = asyncio.create_task(
-        provider(send_data_queue, data_rate=20, iterations=650, subchunks=100)
+        provider(send_data_queue, data_rate=30, iterations=650, subchunks=100)
     )
     client_task = asyncio.create_task(client.run())
 

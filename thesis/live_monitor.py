@@ -15,7 +15,7 @@ from AnalyzerUnit import AnalyzerUnit
 
 # data_queue = deque(maxlen=1000)
 _analyzer_unit = AnalyzerUnit(
-    sampling_rate=5, modulation_frequency=1, base_to_amplitude_ratio=0.25
+    sampling_rate=5, modulation_frequency=1, base_to_amplitude_ratio=0.15
 )
 save_log = deque()
 
@@ -171,16 +171,16 @@ def update(i):
     )
 
     ax1.relim()
-    ax1.set_ylim(0, 175000)
+    # ax1.set_ylim(0, 175000)
     ax1.autoscale_view()
     ax3.relim()
     ax3.set_ylim(0, 1.25)
     ax3.autoscale_view()
     ax2.relim()
-    ax2.set_ylim(0, 175000)
+    # ax2.set_ylim(0, 175000)
     ax2.autoscale_view()
     ax4.relim()
-    ax4.set_ylim([0, 1])
+    ax4.set_ylim([0, 2])
     ax4.autoscale_view()
 
 

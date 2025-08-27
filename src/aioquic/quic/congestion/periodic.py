@@ -144,19 +144,18 @@ class PeriodicCongestionControl(QuicCongestionControl):
             match (self._operation_state):
                 case OperationState.INCREASE:
                     self._base_cwnd = self.get_cwnd_base_next_step()
-                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) < 0.3:
+                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) > 0.4:
                         self.change_operation_state(OperationState.STEP_DOWN)
                 case OperationState.STATIC:
-                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) > 0.6:
+                    mean = np.mean(self._analyzer_unit._congwin_to_response_ratio)
+                    if mean < 0.45:
                         self.change_operation_state(OperationState.STEP_UP)
-                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) < 0.5:
+                    if mean > 0.45:
                         self.change_operation_state(OperationState.STEP_DOWN)
                 case OperationState.STEP_UP:
-                    self._base_cwnd *= (
-                        1
-                        + self._base_to_amplitude_ratio
-                        * self._analyzer_unit._congwin_to_response_ratio[-1]
-                    )
+                    self._base_cwnd = max(self._analyzer_unit._acks_in_process)
+                    print("BASE SET TO:", self._base_cwnd)
+
                     self.change_operation_state(OperationState.SENSE)
                 case OperationState.STEP_DOWN:
                     self._base_cwnd = self._analyzer_unit.get_bdp_estimate()
@@ -164,9 +163,9 @@ class PeriodicCongestionControl(QuicCongestionControl):
                     self.change_operation_state(OperationState.SENSE)
                 case OperationState.SENSE:
                     self.rtt_estimate = self._analyzer_unit.get_rtt_estimate()
-                    self._base_to_amplitude_ratio = (
+                    """self._base_to_amplitude_ratio = (
                         self._analyzer_unit.get_base_to_amplitude_ratio("SENSE")
-                    )
+                    )"""
 
                     if (
                         time.monotonic() - self.state_start_t
@@ -219,7 +218,6 @@ class PeriodicCongestionControl(QuicCongestionControl):
             self.bytes_in_flight -= packet.sent_bytes
 
     def on_packets_lost(self, *, now: float, packets: Iterable[QuicSentPacket]) -> None:
-        print("LOSS")
         lost_largest_time = 0.0
         for packet in packets:
             self.bytes_in_flight -= packet.sent_bytes

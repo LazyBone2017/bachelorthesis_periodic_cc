@@ -1,4 +1,5 @@
 from collections import deque
+import math
 
 from matplotlib.mlab import detrend
 import numpy as np
@@ -37,7 +38,7 @@ class AnalyzerUnit:
             [0] * self.input_queue.maxlen, maxlen=self.input_queue.maxlen
         )
         self._congwin_to_response_ratio = deque(
-            [1] * self.input_queue.maxlen, maxlen=self.input_queue.maxlen
+            [0] * self.input_queue.maxlen, maxlen=self.input_queue.maxlen
         )
         self._base_cwnd = deque(
             [0] * self.input_queue.maxlen, maxlen=self.input_queue.maxlen
@@ -98,15 +99,11 @@ class AnalyzerUnit:
             return
 
         # get max delta values of cwnd and response
-        cwnd_max_diff = max(self._congwin) - self._base_cwnd[-1] * (
-            1 - self.base_to_amplitude_ratio
-        )
-        response_max_diff = max(self._acks_in_process) - self._base_cwnd[-1] * (
-            1 - self.base_to_amplitude_ratio
-        )
 
-        # overlap %
-        self._congwin_to_response_ratio.append(response_max_diff / cwnd_max_diff)
+        self._congwin_to_response_ratio.append(
+            (max(self._congwin) - max(self._acks_in_process))
+            / (2 * self._base_cwnd[-1] * self.base_to_amplitude_ratio)
+        )
 
     def get_bdp_estimate(self):
         if len(self._acks_in_process) == 0:
