@@ -94,6 +94,7 @@ class AnalyzerUnit:
             or len(self._congwin) == 0
             or self._acks_in_process is None
             or len(self._acks_in_process) == 0
+            or self._base_cwnd[-1] is None
         ):
             self._congwin_to_response_ratio.append(0.5)
             return

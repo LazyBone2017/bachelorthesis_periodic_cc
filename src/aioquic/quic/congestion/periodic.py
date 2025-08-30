@@ -34,6 +34,7 @@ SAVED = False
 
 
 class OperationState(Enum):
+    STARTUP = auto()
     INCREASE = auto()
     STEP_UP = auto()
     STEP_DOWN = auto()
@@ -57,14 +58,16 @@ class PeriodicCongestionControl(QuicCongestionControl):
         # self.congestion_window = 120000
         # self._amplitude = self._base_cwnd * 0.35  # 0.25
         self._base_to_amplitude_ratio = 0.15
-        self._frequency = 1  # how fast it oscillates (in Hz)
+        self._frequency = (
+            1  # how fast it oscillates (in Hz) f_mod = 1/10 f_sample = 1/10 RTT
+        )
         self.rtt_estimate = 0.1
         self.latest_rtt = 0.1
         self.sampling_interval = 0.2
         self.acked_bytes_in_interval = 0
         self.sent_bytes_in_interval = 0
         self.lost_byte_in_interval = 0
-        self._operation_state = OperationState.INCREASE
+        self._operation_state = OperationState.STARTUP
         self.state_start_t = time.monotonic()
         self.saved = False
         self.threshold = 0
@@ -138,19 +141,39 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self._operation_state = state
         print("Switching to: ", state)
 
+    def state_active_over(self, t):
+        return time.monotonic() - self.state_start_t > t
+
     async def control(self):
         while True:
             self._analyzer_unit.update_processing()
             match (self._operation_state):
+                case OperationState.STARTUP:
+                    if (
+                        self.state_active_over(
+                            self._analyzer_unit.input_queue.maxlen
+                            * self.sampling_interval
+                        )
+                        * 2
+                    ):
+                        self.change_operation_state(OperationState.INCREASE)
                 case OperationState.INCREASE:
                     self._base_cwnd = self.get_cwnd_base_next_step()
-                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) > 0.4:
+                    mean = np.percentile(
+                        self._analyzer_unit._congwin_to_response_ratio, 25
+                    )
+                    print(mean)
+                    if mean > 0.5:
                         self.change_operation_state(OperationState.STEP_DOWN)
                 case OperationState.STATIC:
-                    mean = np.mean(self._analyzer_unit._congwin_to_response_ratio)
-                    if mean < 0.45:
+                    # mean = np.mean(self._analyzer_unit._congwin_to_response_ratio)
+                    mean = np.percentile(
+                        self._analyzer_unit._congwin_to_response_ratio, 25
+                    )
+                    print(mean)
+                    if mean < 0.4:
                         self.change_operation_state(OperationState.STEP_UP)
-                    if mean > 0.45:
+                    if mean > 0.5:
                         self.change_operation_state(OperationState.STEP_DOWN)
                 case OperationState.STEP_UP:
                     self._base_cwnd = max(self._analyzer_unit._acks_in_process)
@@ -158,7 +181,10 @@ class PeriodicCongestionControl(QuicCongestionControl):
 
                     self.change_operation_state(OperationState.SENSE)
                 case OperationState.STEP_DOWN:
-                    self._base_cwnd = self._analyzer_unit.get_bdp_estimate()
+
+                    base = self._analyzer_unit.get_bdp_estimate()
+                    if base is not None:
+                        self._base_cwnd = base
                     print("BASE SET TO:", self._base_cwnd)
                     self.change_operation_state(OperationState.SENSE)
                 case OperationState.SENSE:
@@ -167,10 +193,8 @@ class PeriodicCongestionControl(QuicCongestionControl):
                         self._analyzer_unit.get_base_to_amplitude_ratio("SENSE")
                     )"""
 
-                    if (
-                        time.monotonic() - self.state_start_t
-                        > self._analyzer_unit.input_queue.maxlen
-                        * self.sampling_interval
+                    if self.state_active_over(
+                        self._analyzer_unit.input_queue.maxlen * self.sampling_interval
                     ):
                         self.change_operation_state(OperationState.STATIC)
 
@@ -198,7 +222,8 @@ class PeriodicCongestionControl(QuicCongestionControl):
             self.congestion_window = int(self._base_cwnd + amplitude * sine_component)
 
             # set update interval proportional to modulation frequency
-            await asyncio.sleep(1 / (10 * self._frequency))
+            # await asyncio.sleep(1 / (10 * self._frequency))
+            await asyncio.sleep(self.sampling_interval)
 
     def on_packet_acked(self, *, now: float, packet: QuicSentPacket) -> None:
         self.bytes_in_flight -= packet.sent_bytes
