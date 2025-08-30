@@ -69,6 +69,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self.lost_byte_in_interval = 0
         self._operation_state = OperationState.STARTUP
         self.state_start_t = time.monotonic()
+        self.supressed_loss = 0
         self.saved = False
         self.threshold = 0
         self.is_client = is_client
@@ -137,6 +138,8 @@ class PeriodicCongestionControl(QuicCongestionControl):
         return next
 
     def change_operation_state(self, state: OperationState):
+        if state == OperationState.SENSE:
+            self.supressed_loss = 0
         self.state_start_t = time.monotonic()
         self._operation_state = state
         print("Switching to: ", state)
@@ -162,22 +165,23 @@ class PeriodicCongestionControl(QuicCongestionControl):
                     mean = np.percentile(
                         self._analyzer_unit._congwin_to_response_ratio, 25
                     )
-                    print(mean)
                     if mean > 0.5:
                         self.change_operation_state(OperationState.STEP_DOWN)
                 case OperationState.STATIC:
+                    print("LOSS", (self._analyzer_unit._loss_rate[-1]))
                     # mean = np.mean(self._analyzer_unit._congwin_to_response_ratio)
                     mean = np.percentile(
                         self._analyzer_unit._congwin_to_response_ratio, 25
                     )
-                    print(mean)
-                    if mean < 0.4:
+                    if mean < 0.4 and self.supressed_loss == 0:
                         self.change_operation_state(OperationState.STEP_UP)
-                    if mean > 0.5:
+                    elif mean > 0.5:
                         self.change_operation_state(OperationState.STEP_DOWN)
+                    elif self._analyzer_unit._loss_rate[-1] > 0:
+                        self.change_operation_state(OperationState.SENSE)
                 case OperationState.STEP_UP:
                     self._base_cwnd = max(self._analyzer_unit._acks_in_process)
-                    print("BASE SET TO:", self._base_cwnd)
+                    print("STEP_UP: BASE SET TO:", self._base_cwnd)
 
                     self.change_operation_state(OperationState.SENSE)
                 case OperationState.STEP_DOWN:
@@ -185,10 +189,16 @@ class PeriodicCongestionControl(QuicCongestionControl):
                     base = self._analyzer_unit.get_bdp_estimate()
                     if base is not None:
                         self._base_cwnd = base
-                    print("BASE SET TO:", self._base_cwnd)
+                    print("STEP_DOWN: BASE SET TO:", self._base_cwnd)
                     self.change_operation_state(OperationState.SENSE)
                 case OperationState.SENSE:
                     self.rtt_estimate = self._analyzer_unit.get_rtt_estimate()
+                    if self._analyzer_unit._loss_rate[-1] > 0.01:
+                        if self.supressed_loss == 0:
+                            self.supressed_loss = self._analyzer_unit._loss_rate[-1]
+                            print("supressed", self.supressed_loss)
+                        self._base_cwnd *= 0.99
+                        print("SENSE: BASE SET TO:", self._base_cwnd)
                     """self._base_to_amplitude_ratio = (
                         self._analyzer_unit.get_base_to_amplitude_ratio("SENSE")
                     )"""
