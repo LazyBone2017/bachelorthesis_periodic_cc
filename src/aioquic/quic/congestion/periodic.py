@@ -34,6 +34,7 @@ SAVED = False
 
 
 class OperationState(Enum):
+    STARTUP = auto()
     INCREASE = auto()
     STEP_UP = auto()
     STEP_DOWN = auto()
@@ -68,8 +69,10 @@ class PeriodicCongestionControl(QuicCongestionControl):
 
         self.acked_bytes_in_interval = 0
         self.sent_bytes_in_interval = 0
-        self._operation_state = OperationState.INCREASE
+        self.lost_byte_in_interval = 0
+        self._operation_state = OperationState.STARTUP
         self.state_start_t = time.monotonic()
+        self.supressed_loss = 0
         self.saved = False
         self.threshold = 0
         self.is_client = is_client
@@ -99,6 +102,11 @@ class PeriodicCongestionControl(QuicCongestionControl):
             lambda: self.sent_bytes_in_interval,
             cleanup_function=self.reset_sent_byte,
         )
+        self.logger.register_metric(
+            "lost_byte",
+            lambda: self.lost_byte_in_interval,
+            cleanup_function=self.reset_lost_byte,
+        )
 
         mod = asyncio.create_task(self.modulate_congestion_window())
         mod.add_done_callback(
@@ -123,6 +131,9 @@ class PeriodicCongestionControl(QuicCongestionControl):
     def reset_sent_byte(self):
         self.sent_bytes_in_interval = 0
 
+    def reset_lost_byte(self):
+        self.lost_byte_in_interval = 0
+
     def get_cwnd_base_next_step(self):
         next = self._base_cwnd * (
             1 + 2 * math.pi * self._base_to_amplitude_ratio * self._frequency * 0.05
@@ -131,39 +142,73 @@ class PeriodicCongestionControl(QuicCongestionControl):
         return next
 
     def change_operation_state(self, state: OperationState):
+        if state == OperationState.SENSE:
+            self.supressed_loss = 0
         self.state_start_t = time.monotonic()
         self._operation_state = state
         print("Switching to: ", state)
+
+    def state_active_over(self, t):
+        return time.monotonic() - self.state_start_t > t
 
     async def control(self):
         while True:
             self._analyzer_unit.update_processing()
             match (self._operation_state):
+                case OperationState.STARTUP:
+                    if (
+                        self.state_active_over(
+                            self._analyzer_unit.input_queue.maxlen
+                            * self.sampling_interval
+                        )
+                        * 2
+                    ):
+                        self.change_operation_state(OperationState.INCREASE)
                 case OperationState.INCREASE:
                     self._base_cwnd = self.get_cwnd_base_next_step()
-                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) < 0.3:
+                    mean = np.percentile(
+                        self._analyzer_unit._congwin_to_response_ratio, 25
+                    )
+                    if mean > 0.5:
                         self.change_operation_state(OperationState.STEP_DOWN)
                 case OperationState.STATIC:
-                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) > 0.6:
-                        self.change_operation_state(OperationState.STEP_UP)
-                    if np.mean(self._analyzer_unit._congwin_to_response_ratio) < 0.5:
-                        self.change_operation_state(OperationState.STEP_DOWN)
-                case OperationState.STEP_UP:
-                    self._base_cwnd *= (
-                        1
-                        + self._base_to_amplitude_ratio
-                        * self._analyzer_unit._congwin_to_response_ratio[-1]
+                    print("LOSS", (self._analyzer_unit._loss_rate[-1]))
+                    # mean = np.mean(self._analyzer_unit._congwin_to_response_ratio)
+                    mean = np.percentile(
+                        self._analyzer_unit._congwin_to_response_ratio, 25
                     )
+                    if mean < 0.4 and self.supressed_loss == 0:
+                        self.change_operation_state(OperationState.STEP_UP)
+                    elif mean > 0.5:
+                        self.change_operation_state(OperationState.STEP_DOWN)
+                    elif self._analyzer_unit._loss_rate[-1] > 0:
+                        self.change_operation_state(OperationState.SENSE)
+                case OperationState.STEP_UP:
+                    self._base_cwnd = max(self._analyzer_unit._acks_in_process)
+                    print("STEP_UP: BASE SET TO:", self._base_cwnd)
+
                     self.change_operation_state(OperationState.SENSE)
                 case OperationState.STEP_DOWN:
-                    self._base_cwnd = self._analyzer_unit.get_bdp_estimate()
-                    print("BASE SET TO:", self._base_cwnd)
+
+                    base = self._analyzer_unit.get_bdp_estimate()
+                    if base is not None:
+                        self._base_cwnd = base
+                    print("STEP_DOWN: BASE SET TO:", self._base_cwnd)
                     self.change_operation_state(OperationState.SENSE)
                 case OperationState.SENSE:
-                    if (
-                        time.monotonic() - self.state_start_t
-                        > self._analyzer_unit.input_queue.maxlen
-                        * self.sampling_interval
+                    self.rtt_estimate = self._analyzer_unit.get_rtt_estimate()
+                    if self._analyzer_unit._loss_rate[-1] > 0.01:
+                        if self.supressed_loss == 0:
+                            self.supressed_loss = self._analyzer_unit._loss_rate[-1]
+                            print("supressed", self.supressed_loss)
+                        self._base_cwnd *= 0.99
+                        print("SENSE: BASE SET TO:", self._base_cwnd)
+                    """self._base_to_amplitude_ratio = (
+                        self._analyzer_unit.get_base_to_amplitude_ratio("SENSE")
+                    )"""
+
+                    if self.state_active_over(
+                        self._analyzer_unit.input_queue.maxlen * self.sampling_interval
                     ):
                         self.change_operation_state(OperationState.STATIC)
 
@@ -192,7 +237,8 @@ class PeriodicCongestionControl(QuicCongestionControl):
             self.congestion_window = int(self._base_cwnd + amplitude * sine_component)
 
             # set update interval proportional to modulation frequency
-            await asyncio.sleep(1 / (10 * self._frequency))
+            # await asyncio.sleep(1 / (10 * self._frequency))
+            await asyncio.sleep(self.sampling_interval)
 
     def on_packet_acked(self, *, now: float, packet: QuicSentPacket) -> None:
         self.bytes_in_flight -= packet.sent_bytes
@@ -212,11 +258,13 @@ class PeriodicCongestionControl(QuicCongestionControl):
             self.bytes_in_flight -= packet.sent_bytes
 
     def on_packets_lost(self, *, now: float, packets: Iterable[QuicSentPacket]) -> None:
-        print("LOSS")
         lost_largest_time = 0.0
         for packet in packets:
             self.bytes_in_flight -= packet.sent_bytes
             lost_largest_time = packet.sent_time
+            self.lost_byte_in_interval += packet.sent_bytes * (
+                self.rtt_estimate / self.sampling_interval
+            )
 
     def on_rtt_measurement(self, *, now: float, rtt: float) -> None:
         # check whether we should exit slow start

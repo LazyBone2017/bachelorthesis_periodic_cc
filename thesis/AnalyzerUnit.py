@@ -1,4 +1,5 @@
 from collections import deque
+import math
 
 from matplotlib.mlab import detrend
 import numpy as np
@@ -21,6 +22,7 @@ class AnalyzerUnit:
         self._congwin = [0] * self.input_queue.maxlen
         self._ack_rate = [0] * self.input_queue.maxlen
         self._sent_bytes = [0] * self.input_queue.maxlen
+        self.lost_byte = [0] * self.input_queue.maxlen
 
         self._delta_t_uniform = [0] * self.input_queue.maxlen
         self._filtered_acks = [0] * self.input_queue.maxlen
@@ -36,9 +38,13 @@ class AnalyzerUnit:
             [0] * self.input_queue.maxlen, maxlen=self.input_queue.maxlen
         )
         self._congwin_to_response_ratio = deque(
-            [1] * self.input_queue.maxlen, maxlen=self.input_queue.maxlen
+            [0] * self.input_queue.maxlen, maxlen=self.input_queue.maxlen
         )
         self._base_cwnd = deque(
+            [0] * self.input_queue.maxlen, maxlen=self.input_queue.maxlen
+        )
+
+        self._loss_rate = deque(
             [0] * self.input_queue.maxlen, maxlen=self.input_queue.maxlen
         )
 
@@ -88,20 +94,17 @@ class AnalyzerUnit:
             or len(self._congwin) == 0
             or self._acks_in_process is None
             or len(self._acks_in_process) == 0
+            or self._base_cwnd[-1] is None
         ):
             self._congwin_to_response_ratio.append(0.5)
             return
 
         # get max delta values of cwnd and response
-        cwnd_max_diff = max(self._congwin) - self._base_cwnd[-1] * (
-            1 - self.base_to_amplitude_ratio
-        )
-        response_max_diff = max(self._acks_in_process) - self._base_cwnd[-1] * (
-            1 - self.base_to_amplitude_ratio
-        )
 
-        # overlap %
-        self._congwin_to_response_ratio.append(response_max_diff / cwnd_max_diff)
+        self._congwin_to_response_ratio.append(
+            (max(self._congwin) - max(self._acks_in_process))
+            / (2 * self._base_cwnd[-1] * self.base_to_amplitude_ratio)
+        )
 
     def get_bdp_estimate(self):
         print("ACKS LEN", len(self._acks_in_process))
@@ -110,6 +113,21 @@ class AnalyzerUnit:
 
         print("ESTIMATE", np.max(self._acks_in_process))
         return np.max(self._acks_in_process)
+
+    def generate_loss_rate(self):
+        rate = sum(self.lost_byte, 0) / sum(self._sent_bytes, 1)
+        self._loss_rate.append(rate)
+
+    def get_base_to_amplitude_ratio(self, state):
+        default_ratio = 0.25
+
+        if (
+            state == "SENSE"
+        ):  # high loss here means shallow buffers -> decrease amplitude(but: remove baseline loss first)
+            r = (
+                default_ratio - np.average(self._loss_rate) * 2
+            )  # const determines agressiveness
+            return r
 
     def update_processing(self):
         if len(self.input_queue) == 0:
@@ -121,10 +139,12 @@ class AnalyzerUnit:
             latest_rtt,
             conwin_base,
             sent_bytes,
+            lost_bytes,
         ) = zip(*self.input_queue)
         self._congwin = np.array(congwin)
         self._sent_bytes = np.array(sent_bytes)
         self._acks_in_process = np.array(self._raw_acks)
+        self.lost_byte = np.array(lost_bytes)
         self.update_rtt(latest_rtt)
         self._rtts = latest_rtt
         self._base_cwnd = conwin_base
@@ -136,7 +156,8 @@ class AnalyzerUnit:
         # self._acks_in_process = self.apply_filter(window=5)
         self._acks_in_process = self.apply_interpolation()
         self.generate_congwin_to_response_ratio()
+        self.generate_loss_rate()
 
     # TODO average this in a probing manner for later
     def update_rtt(self, latest_rtt):
-        self._rtt_estimate = latest_rtt[-1]
+        self._rtt_estimate = min(latest_rtt)
