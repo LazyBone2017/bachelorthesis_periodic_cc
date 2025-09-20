@@ -8,18 +8,19 @@ N_STREAMS = 10
 
 
 class QuicClient:
-    def __init__(self, host, port, queue):
+    def __init__(self, host, port, queue, external_config):
         self.host = host
         self.port = port
         self.queue = queue
         self.configuration = QuicConfiguration(
             is_client=True,
             alpn_protocols=["hq-29"],
-            congestion_control_algorithm="periodic",
+            congestion_control_algorithm=external_config["cca"]["name"],
             max_datagram_size=1200,
         )
         self.configuration.verify_mode = False
         self.configuration.secrets_log_file = open("secrets.log", "a")
+        self.external_config = external_config
 
     async def run(self):
         async with connect(
@@ -27,6 +28,7 @@ class QuicClient:
             self.port,
             configuration=self.configuration,
             create_protocol=ClientProtocol,
+            external_config=self.external_config,
         ) as connection:
             print("[client] Connected to server.")
             streams = []

@@ -47,23 +47,24 @@ class PeriodicCongestionControl(QuicCongestionControl):
     New Periodic congestion control.
     """
 
-    def __init__(self, *, max_datagram_size: int, is_client=False) -> None:
+    def __init__(self, *, max_datagram_size: int, external_config) -> None:
         super().__init__(max_datagram_size=max_datagram_size)
         self._max_datagram_size = max_datagram_size
         self._congestion_recovery_start_time = 0.0
         self._congestion_stash = 0
         self._rtt_monitor = QuicRttMonitor()
         self._start_time = time.monotonic()
-        self._base_cwnd = 1200  # baseline in bytes
-        # self.congestion_window = 120000
-        # self._amplitude = self._base_cwnd * 0.35  # 0.25
-        self._base_to_amplitude_ratio = 0.15
-        self._frequency = (
-            1  # how fast it oscillates (in Hz) f_mod = 1/10 f_sample = 1/10 RTT
+
+        self._base_cwnd = float(external_config["cca"]["cwnd_base_0"])
+        self._base_to_amplitude_ratio = float(
+            external_config["cca"]["base_to_amplitude_ratio"]
         )
+        self._frequency = float(external_config["cca"]["mod_rate"])
+        self.sampling_interval = 1 / float(external_config["cca"]["sampling_rate"])
+
         self.rtt_estimate = 0.1
-        self.latest_rtt = 0.1
-        self.sampling_interval = 0.2
+        self.latest_rtt = 1
+
         self.acked_bytes_in_interval = 0
         self.sent_bytes_in_interval = 0
         self.lost_byte_in_interval = 0
@@ -72,15 +73,12 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self.supressed_loss = 0
         self.saved = False
         self.threshold = 0
-        self.is_client = is_client
         self.logger = TimestampLogger.TimestampLogger(
-            1 / self.sampling_interval, self.is_client, self.is_client, self.is_client
+            ui_out=True, external_config=external_config
         )
 
         self._analyzer_unit = AnalyzerUnit(
-            modulation_frequency=self._frequency,
-            sampling_rate=1 / self.sampling_interval,
-            base_to_amplitude_ratio=self._base_to_amplitude_ratio,
+            config=external_config,
         )
 
         self.logger.set_direct_out(self._analyzer_unit.add_to_queue)
@@ -117,6 +115,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
         c.add_done_callback(
             lambda t: print("TASK FINISHED:", t, "EXCEPTION:", t.exception())
         )
+        print("config read @periodic")
 
     # RTT shold be determine sampling interval
     # Mod Freq determines modulation interval
@@ -173,12 +172,10 @@ class PeriodicCongestionControl(QuicCongestionControl):
                     mean = np.percentile(
                         self._analyzer_unit._congwin_to_response_ratio, 25
                     )
-                    if mean < 0.4 and self.supressed_loss == 0:
+                    if mean < 0.4:  # and self.supressed_loss == 0:
                         self.change_operation_state(OperationState.STEP_UP)
                     elif mean > 0.5:
                         self.change_operation_state(OperationState.STEP_DOWN)
-                    elif self._analyzer_unit._loss_rate[-1] > 0:
-                        self.change_operation_state(OperationState.SENSE)
                 case OperationState.STEP_UP:
                     self._base_cwnd = max(self._analyzer_unit._acks_in_process)
                     print("STEP_UP: BASE SET TO:", self._base_cwnd)
@@ -193,7 +190,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
                     self.change_operation_state(OperationState.SENSE)
                 case OperationState.SENSE:
                     self.rtt_estimate = self._analyzer_unit.get_rtt_estimate()
-                    if self._analyzer_unit._loss_rate[-1] > 0.01:
+                    if self._analyzer_unit._loss_rate[-1] > 0.01 and False:
                         if self.supressed_loss == 0:
                             self.supressed_loss = self._analyzer_unit._loss_rate[-1]
                             print("supressed", self.supressed_loss)
@@ -226,13 +223,11 @@ class PeriodicCongestionControl(QuicCongestionControl):
             delta_t = time.monotonic() - self._start_time
             sine_component = math.sin(2 * math.pi * self._frequency * delta_t)
 
-            # sine_component = self.rect_mod(sine_component)
             amplitude = self._base_cwnd * self._base_to_amplitude_ratio
-
+            if sine_component < 0:
+                amplitude * 1.25
             self.congestion_window = int(self._base_cwnd + amplitude * sine_component)
 
-            # set update interval proportional to modulation frequency
-            # await asyncio.sleep(1 / (10 * self._frequency))
             await asyncio.sleep(self.sampling_interval)
 
     def on_packet_acked(self, *, now: float, packet: QuicSentPacket) -> None:
@@ -262,7 +257,6 @@ class PeriodicCongestionControl(QuicCongestionControl):
             )
 
     def on_rtt_measurement(self, *, now: float, rtt: float) -> None:
-        # check whether we should exit slow start
         self.latest_rtt = rtt
 
 
