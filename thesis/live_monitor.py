@@ -22,6 +22,7 @@ _analyzer_unit = AnalyzerUnit(
     sampling_rate=float(config["cca"]["sampling_rate"]),
     modulation_frequency=float(config["cca"]["mod_rate"]),
     base_to_amplitude_ratio=float(config["cca"]["base_to_amplitude_ratio"]),
+    external_config=config,
 )
 save_log = deque()
 
@@ -143,12 +144,16 @@ class DataReceiver:
 def update(i):
     _analyzer_unit.update_processing()
 
-    line1.set_data(_analyzer_unit._delta_t, _analyzer_unit._congwin)
-    line1c.set_data(_analyzer_unit._delta_t, _analyzer_unit._sent_bytes)
-    line2a.set_data(_analyzer_unit._delta_t, _analyzer_unit._raw_acks)
+    line1.set_data(_analyzer_unit.metrics["delta_t"], _analyzer_unit.metrics["cwnd"])
+    line1c.set_data(
+        _analyzer_unit.metrics["delta_t"], _analyzer_unit.metrics["sent_byte"]
+    )
+    line2a.set_data(
+        _analyzer_unit.metrics["delta_t"], _analyzer_unit.metrics["acked_byte"]
+    )
     # line2b.set_data(_analyzer_unit._delta_t, _analyzer_unit._filtered_acks)
-    line3a.set_data(_analyzer_unit._delta_t, _analyzer_unit._rtts)
-    line2b.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._interpolated_acks)
+    line3a.set_data(_analyzer_unit.metrics["delta_t"], _analyzer_unit.metrics["rtt"])
+    # line2b.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._interpolated_acks)
     """line2d.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._detrended_acks)
     line2e.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._windowed_acks)"""
     """line3a.set_data(
@@ -166,13 +171,13 @@ def update(i):
         np.arange(len(_analyzer_unit._loss_rate)),
         np.array(_analyzer_unit._loss_rate) * 10,
     )
-    base = _analyzer_unit._base_cwnd
+    base = _analyzer_unit.metrics["cwnd_base"]
     line1b.set_data(
-        _analyzer_unit._delta_t,
+        _analyzer_unit.metrics["delta_t"],
         base,
     )
     line2c.set_data(
-        _analyzer_unit._delta_t,
+        _analyzer_unit.metrics["delta_t"],
         base,
     )
 

@@ -6,12 +6,15 @@ mod_rate = 1
 cwnd_base_0 = 1200
 base_to_amplitude_ratio = 0.25
 sampling_rate = 5
-metrics = ["congestion_window", "acked_byte", "sent_byte", "rtt_estimate", "cwnd_base"]
-units = ["byte", "byte", "byte", "s", "byte"]
+transferred_metrics = ["cwnd", "acked_byte", "sent_byte", "rtt", "cwnd_base", "lost_byte"]
 
 [out]
 out_after = 300
 filename = "data_output"
+
+[monitor]
+units = ["byte", "byte", "byte", "s", "byte"]
+composition = [["cwnd", "sent_byte", "cwnd_base"], ["acked_byte", "cwnd_base"], ["rtt"], ["lost_byte"]]
 
 [provider]
 rate_mbit = 10

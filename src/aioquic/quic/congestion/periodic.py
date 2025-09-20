@@ -65,7 +65,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self.sampling_interval = 1 / float(external_config["cca"]["sampling_rate"])
 
         self.rtt_estimate = 0.1
-        self.latest_rtt = 0.05
+        self.latest_rtt = 1
 
         self.acked_bytes_in_interval = 0
         self.sent_bytes_in_interval = 0
@@ -84,6 +84,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
             modulation_frequency=self._frequency,
             sampling_rate=1 / self.sampling_interval,
             base_to_amplitude_ratio=self._base_to_amplitude_ratio,
+            external_config=external_config,
         )
 
         self.logger.set_direct_out(self._analyzer_unit.add_to_queue)
@@ -177,12 +178,10 @@ class PeriodicCongestionControl(QuicCongestionControl):
                     mean = np.percentile(
                         self._analyzer_unit._congwin_to_response_ratio, 25
                     )
-                    if mean < 0.4 and self.supressed_loss == 0:
+                    if mean < 0.4:  # and self.supressed_loss == 0:
                         self.change_operation_state(OperationState.STEP_UP)
                     elif mean > 0.5:
                         self.change_operation_state(OperationState.STEP_DOWN)
-                    elif self._analyzer_unit._loss_rate[-1] > 0:
-                        self.change_operation_state(OperationState.SENSE)
                 case OperationState.STEP_UP:
                     self._base_cwnd = max(self._analyzer_unit._acks_in_process)
                     print("STEP_UP: BASE SET TO:", self._base_cwnd)
@@ -197,7 +196,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
                     self.change_operation_state(OperationState.SENSE)
                 case OperationState.SENSE:
                     self.rtt_estimate = self._analyzer_unit.get_rtt_estimate()
-                    if self._analyzer_unit._loss_rate[-1] > 0.01:
+                    if self._analyzer_unit._loss_rate[-1] > 0.01 and False:
                         if self.supressed_loss == 0:
                             self.supressed_loss = self._analyzer_unit._loss_rate[-1]
                             print("supressed", self.supressed_loss)
