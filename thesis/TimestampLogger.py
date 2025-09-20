@@ -9,24 +9,40 @@ LOG = []
 
 
 class TimestampLogger:
-    def __init__(self, sampling_rate, ui_out=False, file_out=False, is_client=False):
+    def __init__(self, ui_out, external_config):
         self.ui_out = ui_out
         if ui_out:
             self.socket = zmq.Context().socket(zmq.PUSH)
             self.socket.connect("tcp://127.0.0.1:5555")
-        self.sampling_rate = sampling_rate
-        self.metrics = []
+        self.sampling_rate = external_config["cca"]["sampling_rate"]
+        self.registry = {}
         self._start_time = time.monotonic()
         self.direct_out = None
         self.saved = False
-        self.is_client = is_client
-        self.csv_length = 300
-
+        self.csv_length = external_config["out"]["out_after"]
+        self.csv_name = external_config["out"]["filename"]
+        self.external_config = external_config
         self.threshold = 0
 
     def register_metric(self, name: str, func, cleanup_function=None):
-        self.metrics.append((name, func, cleanup_function))
+        if name in self.registry:
+            raise KeyError(f"metric {name} is already registerered")
+        self.registry[name] = (func, cleanup_function)
         print("Metric Registered: ", name)
+
+    def get_metric(self, name):
+        if name not in self.registry:
+            raise KeyError(f"metric {name} was not registered.")
+        callback, _ = self.registry[name]
+        return callback()
+
+    def run_metric_cleanup(self, name):
+        if name not in self.registry:
+            raise KeyError(f"metric {name} was not registered.")
+        _, cleanup = self.registry[name]
+        if cleanup is None:
+            return
+        cleanup()
 
     def set_direct_out(self, direct_out):
         self.direct_out = direct_out
@@ -44,18 +60,20 @@ class TimestampLogger:
             if delta_t > self.threshold:
                 print("----Running for", self.threshold, "s----", flush=True)
                 self.threshold += 10
-            timestamp = tuple(func() for (name, func, cleanup) in self.metrics)
-            timestamp = (delta_t,) + timestamp
+
+            timestamp = [delta_t]
+            for name in self.external_config["cca"]["transferred_metrics"]:
+                timestamp.append(self.get_metric(name))
+
             if self.ui_out:
                 self.socket.send_json(timestamp)
             if self.direct_out is not None:
                 self.direct_out(timestamp)
             LOG.append(timestamp)
-            if delta_t > self.csv_length and not self.saved and self.is_client:
-                self.save_to_csv("../data_out/data", LOG)
+            if delta_t > self.csv_length and not self.saved:
+                self.save_to_csv("../data_out/" + self.csv_name, LOG)
                 self.saved = True
-            for name, func, cleanup in self.metrics:
-                if cleanup is not None:
-                    cleanup()
+            for name in self.external_config["cca"]["transferred_metrics"]:
+                self.run_metric_cleanup(name)
 
             await asyncio.sleep(1 / self.sampling_rate)
