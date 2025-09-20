@@ -19,52 +19,46 @@ with open("config_periodic.toml", "rb") as f:
     print("config read @monitor")
 
 _analyzer_unit = AnalyzerUnit(
-    sampling_rate=float(config["cca"]["sampling_rate"]),
-    modulation_frequency=float(config["cca"]["mod_rate"]),
-    base_to_amplitude_ratio=float(config["cca"]["base_to_amplitude_ratio"]),
-    external_config=config,
+    config=config,
 )
 save_log = deque()
 
+fig = plt.figure(figsize=(19.2 * 0.8, 10.8 * 0.8), dpi=100)
 
-fig, (ax1, ax2, ax3, ax4) = plt.subplots(
-    4, 1, figsize=(19.2 * 0.8, 10.8 * 0.8), dpi=100
-)
-plt.subplots_adjust(bottom=0.2)
-(line1,) = ax1.plot([], [])
-(line1b,) = ax1.plot([], [])
-(line1c,) = ax1.plot([], [], label="Sent_bytes", color="red")
-(line2a,) = ax2.plot([], [], label="Acked Bytes")
-(line2b,) = ax2.plot([], [], label="Acked Bytes Filtered", color="red")
-(line2c,) = ax2.plot([], [], label="Acked Bytes Filtered Interpolated", color="orange")
-"""(line2d,) = ax2.plot(
-    [], [], label="Acked Bytes Filtered Interpolated Detrended", color="orange"
-)
-(line2e,) = ax2.plot(
-    [], [], label="Acked Bytes Filtered Interpolated Detrended Windowed", color="pink"
-)"""
-(line3a,) = ax3.plot([], [], label="Ratio", color="red")
-(line3b,) = ax3.plot([], [], label="Ratio Avg", color="blue")
+axes = {}
 
-(line4,) = ax4.plot([], [], label="Conwin/Response")
-(line4b,) = ax4.plot([], [], label="Lost Byte % x10")
-# (line4b,) = ax4.plot([], [], label="Savgol Hanning 0-Pad FFT", color="red")
+axes["in"] = plt.subplot2grid((4, 2), (0, 0), colspan=2)
+
+axes["out"] = plt.subplot2grid((4, 2), (1, 0), colspan=2)
+
+axes["left"] = plt.subplot2grid((4, 2), (2, 0))
+
+axes["right"] = plt.subplot2grid((4, 2), (2, 1))
+
+axes["ratio"] = plt.subplot2grid((4, 2), (3, 0), colspan=2)
+
+lines = {}
 
 
-ax1.set_ylabel("Congwin(Byte)")
-ax2.set_ylabel("Acked(Byte)")
-# ax3.set_ylabel("RTT(s)")
-# ax3.set_xlabel("Time(s)")
-ax3.set_xlabel("Time(s)")
-ax3.set_ylabel("Base to 2nd Harmonic Ratio")
-ax4.set_xlabel("Frequency(Hz)")
-ax4.set_ylabel("Magnitude")
+for ax in config["monitor"]["composition"]:
+    for metric in config["monitor"]["composition"][ax]:
+        (line,) = axes[ax].plot(
+            [], [], label=f"{metric}({config["monitor"]["units"][metric]})"
+        )
+        lines[(metric, ax)] = line
 
-ax2.legend(loc=1)
-ax4.legend(loc=1)
+    axes[ax].legend(loc=2)
 
-for ax in (ax1, ax2, ax3, ax4):
-    ax.grid(True)
+axes["left"].set_ylim(0, 1)
+
+(lines[("crr", "ratio")],) = axes["ratio"].plot([], [], label="cwnd_resp_ratio")
+(lines[("loss", "right")],) = axes["right"].plot([], [], label="Loss %")
+
+axes["ratio"].set_ylim(0, 1)
+axes["right"].set_ylim(0, 1)
+
+axes["ratio"].legend(loc=2)
+axes["right"].legend(loc=2)
 
 
 process = [None]
@@ -144,57 +138,30 @@ class DataReceiver:
 def update(i):
     _analyzer_unit.update_processing()
 
-    line1.set_data(_analyzer_unit.metrics["delta_t"], _analyzer_unit.metrics["cwnd"])
-    line1c.set_data(
-        _analyzer_unit.metrics["delta_t"], _analyzer_unit.metrics["sent_byte"]
-    )
-    line2a.set_data(
-        _analyzer_unit.metrics["delta_t"], _analyzer_unit.metrics["acked_byte"]
-    )
-    # line2b.set_data(_analyzer_unit._delta_t, _analyzer_unit._filtered_acks)
-    line3a.set_data(_analyzer_unit.metrics["delta_t"], _analyzer_unit.metrics["rtt"])
-    # line2b.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._interpolated_acks)
-    """line2d.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._detrended_acks)
-    line2e.set_data(_analyzer_unit._delta_t_uniform, _analyzer_unit._windowed_acks)"""
-    """line3a.set_data(
-        np.arange(len(_analyzer_unit._base_to_second_harmonic_ratio)),
-        _analyzer_unit._base_to_second_harmonic_ratio,
-    )
+    for ax in config["monitor"]["composition"]:
+        for metric in config["monitor"]["composition"][ax]:
+            lines[(metric, ax)].set_data(
+                _analyzer_unit.metrics["delta_t"], _analyzer_unit.metrics[metric]
+            )
 
-    line4.set_data(_analyzer_unit._fft_freqs, _analyzer_unit._fft_magnitudes)"""
+        axes[ax].autoscale_view()
+        axes[ax].relim()
+
     crr = _analyzer_unit._congwin_to_response_ratio
-    line4.set_data(
+    lines["crr", "ratio"].set_data(
         np.arange(len(crr)),
         crr,
     )
-    line4b.set_data(
+    lines["loss", "right"].set_data(
         np.arange(len(_analyzer_unit._loss_rate)),
         np.array(_analyzer_unit._loss_rate) * 10,
     )
-    base = _analyzer_unit.metrics["cwnd_base"]
-    line1b.set_data(
-        _analyzer_unit.metrics["delta_t"],
-        base,
-    )
-    line2c.set_data(
-        _analyzer_unit.metrics["delta_t"],
-        base,
-    )
 
-    ax1.relim()
+    axes["right"].autoscale_view()
+    axes["ratio"].autoscale_view()
 
-    # ax1.set_ylim(0, 175000)
-    ax1.autoscale_view()
-    ax3.relim()
-    ax3.set_ylim(0, 1.25)
-    ax3.autoscale_view()
-    ax2.relim()
-
-    # ax2.set_ylim(0, 175000)
-    ax2.autoscale_view()
-    ax4.relim()
-    ax4.set_ylim([0, 2])
-    ax4.autoscale_view()
+    axes["right"].relim()
+    axes["ratio"].relim()
 
 
 receiver = DataReceiver()

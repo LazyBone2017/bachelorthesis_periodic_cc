@@ -13,21 +13,23 @@ import scipy.signal
 class AnalyzerUnit:
     def __init__(
         self,
-        sampling_rate,
-        modulation_frequency,
-        base_to_amplitude_ratio,
-        external_config,
+        config,
     ):
         self.metrics = {
             name: np.array([], dtype=float)
-            for name in external_config["cca"]["transferred_metrics"]
+            for name in config["cca"]["transferred_metrics"]
         }
         self.metrics["delta_t"] = np.array([], dtype=float)
-        self.external_config = external_config
-        self.base_to_amplitude_ratio = base_to_amplitude_ratio
-        self._sampling_rate = sampling_rate
-        self._modulation_frequency = modulation_frequency
-        self.input_queue = deque(maxlen=int(sampling_rate / modulation_frequency * 2))
+        self.config = config
+
+        self.base_to_amplitude_ratio = float(
+            config["cca"].get("base_to_amplitude_ratio", 1)
+        )
+        self.sampling_rate = float(config["cca"]["sampling_rate"])
+        self.modulation_frequency = float(config["cca"].get("mod_rate", 1))
+        self.input_queue = deque(
+            maxlen=int(self.sampling_rate / self.modulation_frequency * 2)
+        )
 
         self._acks_in_process = [0] * self.input_queue.maxlen
 
@@ -54,7 +56,7 @@ class AnalyzerUnit:
         self._delta_t_uniform = np.arange(
             self.metrics["delta_t"][0],
             self.metrics["delta_t"][-1],
-            1 / self._sampling_rate,
+            1 / self.sampling_rate,
         )
 
     def get_rtt_estimate(self):
@@ -78,7 +80,7 @@ class AnalyzerUnit:
             or len(self.metrics["cwnd"]) == 0
             or self._acks_in_process is None
             or len(self._acks_in_process) == 0
-            or self.metrics["cwnd_base"][-1] is None
+            or self.metrics.get("cwnd_base", [1])[-1] is None
         ):
             self._congwin_to_response_ratio.append(0.5)
             return
@@ -87,11 +89,14 @@ class AnalyzerUnit:
 
         self._congwin_to_response_ratio.append(
             (max(self.metrics["cwnd"]) - max(self._acks_in_process))
-            / (2 * self.metrics["cwnd_base"][-1] * self.base_to_amplitude_ratio)
+            / (
+                2
+                * self.metrics.get("cwnd_base", [1])[-1]
+                * self.base_to_amplitude_ratio
+            )
         )
 
     def get_bdp_estimate(self):
-        print("ACKS LEN", len(self._acks_in_process))
         if len(self._acks_in_process) == 0:
             return
 
@@ -120,7 +125,7 @@ class AnalyzerUnit:
         self.metrics = {
             name: arr[:, i]
             for i, name in enumerate(
-                ["delta_t"] + self.external_config["cca"]["transferred_metrics"]
+                ["delta_t"] + self.config["cca"]["transferred_metrics"]
             )
         }
 

@@ -17,9 +17,7 @@ class QuicCongestionControl(abc.ABC):
     congestion_window: int = 0
     ssthresh: Optional[int] = None
 
-    def __init__(
-        self, *, max_datagram_size: int, is_client=False
-    ) -> None:
+    def __init__(self, *, max_datagram_size: int, is_client=False) -> None:
         self.congestion_window = K_INITIAL_WINDOW * max_datagram_size
 
     @abc.abstractmethod
@@ -109,7 +107,7 @@ _factories: Dict[str, QuicCongestionControlFactory] = {}
 
 
 def create_congestion_control(
-    name: str, *, max_datagram_size: int, is_client=False, external_config
+    name: str, *, max_datagram_size: int, external_config
 ) -> QuicCongestionControl:
     """
     Create an instance of the `name` congestion control algorithm.
@@ -120,7 +118,6 @@ def create_congestion_control(
         raise Exception(f"Unknown congestion control algorithm: {name}")
     return factory(
         max_datagram_size=max_datagram_size,
-        is_client=is_client,
         external_config=external_config,
     )
 

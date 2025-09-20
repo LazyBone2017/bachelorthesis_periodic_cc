@@ -402,7 +402,6 @@ class QuicConnection:
             quic_logger=self._quic_logger,
             send_probe=self._send_probe,
             logger=self._logger,
-            is_client=configuration.is_client,
             external_config=external_config,
         )
 

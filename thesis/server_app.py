@@ -18,7 +18,7 @@ async def main():
     config = QuicConfiguration(
         is_client=False,
         alpn_protocols=["hq-29"],
-        congestion_control_algorithm="reno",
+        congestion_control_algorithm="reno_default",
     )
     config.load_cert_chain(
         certfile="../../tests/ssl_cert.pem", keyfile="../../tests/ssl_key.pem"

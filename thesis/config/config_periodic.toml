@@ -12,9 +12,19 @@ transferred_metrics = ["cwnd", "acked_byte", "sent_byte", "rtt", "cwnd_base", "l
 out_after = 300
 filename = "data_output"
 
-[monitor]
-units = ["byte", "byte", "byte", "s", "byte"]
-composition = [["cwnd", "sent_byte", "cwnd_base"], ["acked_byte", "cwnd_base"], ["rtt"], ["lost_byte"]]
+[monitor.units]
+cwnd = "byte"
+acked_byte = "byte"
+sent_byte = "byte"
+rtt = "s"
+cwnd_base = "byte"
+lost_byte = "byte"
+
+[monitor.composition]
+in = ["cwnd_base", "cwnd", "sent_byte"]
+out = ["cwnd_base", "acked_byte"]
+left = ["rtt"]
+
 
 [provider]
 rate_mbit = 10

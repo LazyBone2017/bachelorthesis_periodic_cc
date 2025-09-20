@@ -2,7 +2,7 @@ import logging
 import math
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
-from .congestion import cubic, reno, periodic  # noqa
+from .congestion import cubic, reno, periodic, reno_default  # noqa
 from .congestion.base import K_GRANULARITY, create_congestion_control
 from .logger import QuicLoggerTrace
 from .packet_builder import QuicDeliveryState, QuicSentPacket
@@ -93,7 +93,6 @@ class QuicPacketRecovery:
         send_probe: Callable[[], None],
         logger: Optional[logging.LoggerAdapter] = None,
         quic_logger: Optional[QuicLoggerTrace] = None,
-        is_client=False,
         external_config,
     ) -> None:
         self.max_ack_delay = 0.025
@@ -119,7 +118,6 @@ class QuicPacketRecovery:
         self._cc = create_congestion_control(
             congestion_control_algorithm,
             max_datagram_size=max_datagram_size,
-            is_client=is_client,
             external_config=external_config,
         )
         self._pacer = QuicPacketPacer(max_datagram_size=max_datagram_size)

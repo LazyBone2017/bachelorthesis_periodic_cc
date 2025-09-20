@@ -9,7 +9,7 @@ LOG = []
 
 
 class TimestampLogger:
-    def __init__(self, ui_out, is_client, external_config):
+    def __init__(self, ui_out, external_config):
         self.ui_out = ui_out
         if ui_out:
             self.socket = zmq.Context().socket(zmq.PUSH)
@@ -19,7 +19,6 @@ class TimestampLogger:
         self._start_time = time.monotonic()
         self.direct_out = None
         self.saved = False
-        self.is_client = is_client
         self.csv_length = external_config["out"]["out_after"]
         self.csv_name = external_config["out"]["filename"]
         self.external_config = external_config
@@ -71,7 +70,7 @@ class TimestampLogger:
             if self.direct_out is not None:
                 self.direct_out(timestamp)
             LOG.append(timestamp)
-            if delta_t > self.csv_length and not self.saved and self.is_client:
+            if delta_t > self.csv_length and not self.saved:
                 self.save_to_csv("../data_out/" + self.csv_name, LOG)
                 self.saved = True
             for name in self.external_config["cca"]["transferred_metrics"]:

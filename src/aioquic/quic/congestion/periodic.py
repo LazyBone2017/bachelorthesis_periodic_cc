@@ -47,9 +47,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
     New Periodic congestion control.
     """
 
-    def __init__(
-        self, *, max_datagram_size: int, is_client=False, external_config
-    ) -> None:
+    def __init__(self, *, max_datagram_size: int, external_config) -> None:
         super().__init__(max_datagram_size=max_datagram_size)
         self._max_datagram_size = max_datagram_size
         self._congestion_recovery_start_time = 0.0
@@ -75,16 +73,12 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self.supressed_loss = 0
         self.saved = False
         self.threshold = 0
-        self.is_client = is_client
         self.logger = TimestampLogger.TimestampLogger(
-            ui_out=True, is_client=is_client, external_config=external_config
+            ui_out=True, external_config=external_config
         )
 
         self._analyzer_unit = AnalyzerUnit(
-            modulation_frequency=self._frequency,
-            sampling_rate=1 / self.sampling_interval,
-            base_to_amplitude_ratio=self._base_to_amplitude_ratio,
-            external_config=external_config,
+            config=external_config,
         )
 
         self.logger.set_direct_out(self._analyzer_unit.add_to_queue)
@@ -229,14 +223,11 @@ class PeriodicCongestionControl(QuicCongestionControl):
             delta_t = time.monotonic() - self._start_time
             sine_component = math.sin(2 * math.pi * self._frequency * delta_t)
 
-            # sine_component = self.rect_mod(sine_component)
             amplitude = self._base_cwnd * self._base_to_amplitude_ratio
             if sine_component < 0:
                 amplitude * 1.25
             self.congestion_window = int(self._base_cwnd + amplitude * sine_component)
 
-            # set update interval proportional to modulation frequency
-            # await asyncio.sleep(1 / (10 * self._frequency))
             await asyncio.sleep(self.sampling_interval)
 
     def on_packet_acked(self, *, now: float, packet: QuicSentPacket) -> None:
@@ -266,7 +257,6 @@ class PeriodicCongestionControl(QuicCongestionControl):
             )
 
     def on_rtt_measurement(self, *, now: float, rtt: float) -> None:
-        # check whether we should exit slow start
         self.latest_rtt = rtt
 
 

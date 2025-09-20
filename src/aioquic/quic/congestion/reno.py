@@ -19,9 +19,7 @@ class RenoCongestionControl(QuicCongestionControl):
     New Reno congestion control.
     """
 
-    def __init__(
-        self, *, max_datagram_size: int, is_client=False, external_config
-    ) -> None:
+    def __init__(self, *, max_datagram_size: int, external_config) -> None:
         super().__init__(max_datagram_size=max_datagram_size)
         self._max_datagram_size = max_datagram_size
         self._congestion_recovery_start_time = 0.0
@@ -32,37 +30,46 @@ class RenoCongestionControl(QuicCongestionControl):
 
         self.acked_bytes_in_interval = 0
         self.sent_bytes_in_interval = 0
+        self.lost_byte_in_interval = 0
+
         self.rtt_estimate = 1
-        self.sampling_interval = 0.2
+        self.sampling_interval = 1 / float(external_config["cca"]["sampling_rate"])
+        self.logger = TimestampLogger.TimestampLogger(
+            ui_out=True,
+            external_config=external_config,
+        )
 
-        if is_client:
-            self.logger = TimestampLogger.TimestampLogger(
-                1 / self.sampling_interval, is_client, is_client
-            )
+        self.logger.register_metric("cwnd", lambda: self.congestion_window)
+        self.logger.register_metric(
+            "acked_byte",
+            lambda: self.acked_bytes_in_interval,
+            self.reset_acked_byte,
+        )
+        self.logger.register_metric("rtt", lambda: self.rtt_estimate)
+        self.logger.register_metric(
+            "sent_byte",
+            lambda: self.sent_bytes_in_interval,
+            cleanup_function=self.reset_sent_byte,
+        )
+        self.logger.register_metric(
+            "lost_byte",
+            lambda: self.lost_byte_in_interval,
+            cleanup_function=self.reset_lost_byte,
+        )
 
-            self.logger.register_metric("cwnd", lambda: self.congestion_window)
-            self.logger.register_metric(
-                "acked_byte",
-                lambda: self.acked_bytes_in_interval,
-                self.reset_acked_byte,
-            )
-            self.logger.register_metric("rtt", lambda: self.rtt_estimate)
-            self.logger.register_metric(
-                "sent_byte",
-                lambda: self.sent_bytes_in_interval,
-                cleanup_function=self.reset_sent_byte,
-            )
-
-            t = asyncio.create_task(self.logger.pass_timestamps())
-            t.add_done_callback(
-                lambda t: print("TASK FINISHED:", t, "EXCEPTION:", t.exception())
-            )
+        t = asyncio.create_task(self.logger.pass_timestamps())
+        t.add_done_callback(
+            lambda t: print("TASK FINISHED:", t, "EXCEPTION:", t.exception())
+        )
 
     def reset_acked_byte(self):
         self.acked_bytes_in_interval = 0
 
     def reset_sent_byte(self):
         self.sent_bytes_in_interval = 0
+
+    def reset_lost_byte(self):
+        self.lost_byte_in_interval = 0
 
     def on_packet_acked(self, *, now: float, packet: QuicSentPacket) -> None:
         self.bytes_in_flight -= packet.sent_bytes
@@ -105,6 +112,9 @@ class RenoCongestionControl(QuicCongestionControl):
         for packet in packets:
             self.bytes_in_flight -= packet.sent_bytes
             lost_largest_time = packet.sent_time
+            self.lost_byte_in_interval += packet.sent_bytes * (
+                self.rtt_estimate / self.sampling_interval
+            )
 
         # start a new congestion event if packet was sent after the
         # start of the previous congestion recovery period.
