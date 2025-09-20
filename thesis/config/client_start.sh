@@ -1,2 +1,8 @@
 #!/bin/bash
-sudo ip netns exec ns1 /home/jonas/aioquic/environment/bin/python ../client_session.py
+set -e
+SCRIPT_DIR="$(dirname "$(realpath "$0")")/.."
+ROOT_DIR="$(realpath "$SCRIPT_DIR/..")"
+
+sudo ip netns exec ns1 \
+    "$ROOT_DIR/.venv/bin/python" \
+    "$ROOT_DIR/thesis/client_session.py"

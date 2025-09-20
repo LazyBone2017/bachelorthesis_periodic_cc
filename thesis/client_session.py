@@ -14,7 +14,6 @@ async def main():
         print("config read: ", config)
 
     # Start the client and provider tasks
-
     client = QuicClient.QuicClient(
         "10.0.0.2", 4433, send_data_queue, external_config=config
     )
