@@ -28,6 +28,9 @@ left = ["rtt"]
 
 
 [provider]
+single_file_mode = false
+single_file_size_mbit = 100
+
 rate_mbit = 10
 granularity = 100
 iterations=650
