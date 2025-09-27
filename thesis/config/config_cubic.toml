@@ -1,0 +1,27 @@
+version = 1
+
+[cca]
+name = "cubic"
+sampling_rate = 5
+transferred_metrics = ["cwnd", "acked_byte", "sent_byte", "rtt", "lost_byte"]
+
+[out]
+out_after = 200
+filename = "data_output"
+
+[monitor.units]
+cwnd = "byte"
+acked_byte = "byte"
+sent_byte = "byte"
+rtt = "s"
+
+[monitor.composition]
+in = ["cwnd", "sent_byte"]
+out = ["acked_byte"]
+left = ["rtt"]
+
+
+[provider]
+rate_mbit = 10
+granularity = 100
+iterations=650
