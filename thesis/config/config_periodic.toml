@@ -10,7 +10,7 @@ transferred_metrics = ["cwnd", "acked_byte", "sent_byte", "rtt", "cwnd_base", "l
 shallow_buffer_mitigation = false
 
 [out]
-out_after = 300
+out_after = 200
 filename = "data_output"
 
 [monitor.units]

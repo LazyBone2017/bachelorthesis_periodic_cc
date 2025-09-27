@@ -1,4 +1,7 @@
+import asyncio
 from typing import Any, Dict, Iterable
+
+import TimestampLogger
 
 from ..packet_builder import QuicSentPacket
 from .base import (
@@ -28,7 +31,7 @@ class CubicCongestionControl(QuicCongestionControl):
     Cubic congestion control implementation for aioquic
     """
 
-    def __init__(self, max_datagram_size: int) -> None:
+    def __init__(self, max_datagram_size: int, external_config) -> None:
         super().__init__(max_datagram_size=max_datagram_size)
         # increase by one segment
         self.additive_increase_factor: int = max_datagram_size
@@ -42,6 +45,50 @@ class CubicCongestionControl(QuicCongestionControl):
         self.reset()
 
         self.last_ack = 0.0
+
+        # addded for monitoring
+        self.acked_bytes_in_interval = 0
+        self.sent_bytes_in_interval = 0
+        self.lost_byte_in_interval = 0
+
+        self.rtt_estimate = 1
+        self.sampling_interval = 1 / float(external_config["cca"]["sampling_rate"])
+        self.logger = TimestampLogger.TimestampLogger(
+            ui_out=True,
+            external_config=external_config,
+        )
+
+        self.logger.register_metric("cwnd", lambda: self.congestion_window)
+        self.logger.register_metric(
+            "acked_byte",
+            lambda: self.acked_bytes_in_interval,
+            self.reset_acked_byte,
+        )
+        self.logger.register_metric("rtt", lambda: self.rtt_estimate)
+        self.logger.register_metric(
+            "sent_byte",
+            lambda: self.sent_bytes_in_interval,
+            cleanup_function=self.reset_sent_byte,
+        )
+        self.logger.register_metric(
+            "lost_byte",
+            lambda: self.lost_byte_in_interval,
+            cleanup_function=self.reset_lost_byte,
+        )
+
+        t = asyncio.create_task(self.logger.pass_timestamps())
+        t.add_done_callback(
+            lambda t: print("TASK FINISHED:", t, "EXCEPTION:", t.exception())
+        )
+
+    def reset_acked_byte(self):
+        self.acked_bytes_in_interval = 0
+
+    def reset_sent_byte(self):
+        self.sent_bytes_in_interval = 0
+
+    def reset_lost_byte(self):
+        self.lost_byte_in_interval = 0
 
     def W_cubic(self, t) -> int:
         W_max_segments = self._W_max / self._max_datagram_size
@@ -69,6 +116,11 @@ class CubicCongestionControl(QuicCongestionControl):
     def on_packet_acked(self, *, now: float, packet: QuicSentPacket) -> None:
         self.bytes_in_flight -= packet.sent_bytes
         self.last_ack = packet.sent_time
+
+        # added for monitoring
+        self.acked_bytes_in_interval += packet.sent_bytes * (
+            self.rtt_estimate / self.sampling_interval
+        )
 
         if self.ssthresh is None or self.congestion_window < self.ssthresh:
             # slow start
@@ -147,6 +199,12 @@ class CubicCongestionControl(QuicCongestionControl):
 
     def on_packet_sent(self, *, packet: QuicSentPacket) -> None:
         self.bytes_in_flight += packet.sent_bytes
+
+        # monitoring
+        self.sent_bytes_in_interval += packet.sent_bytes * (
+            self.rtt_estimate / self.sampling_interval
+        )
+
         if self.last_ack == 0.0:
             return
         elapsed_idle = packet.sent_time - self.last_ack
@@ -162,6 +220,10 @@ class CubicCongestionControl(QuicCongestionControl):
         for packet in packets:
             self.bytes_in_flight -= packet.sent_bytes
             lost_largest_time = packet.sent_time
+            # monitoring
+            self.lost_byte_in_interval += packet.sent_bytes * (
+                self.rtt_estimate / self.sampling_interval
+            )
 
         # start a new congestion event if packet was sent after the
         # start of the previous congestion recovery period.
@@ -200,6 +262,9 @@ class CubicCongestionControl(QuicCongestionControl):
             rtt=rtt, now=now
         ):
             self.ssthresh = self.congestion_window
+
+        #monitoring
+        self.rtt_estimate = rtt
 
     def get_log_data(self) -> Dict[str, Any]:
         data = super().get_log_data()

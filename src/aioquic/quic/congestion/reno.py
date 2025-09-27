@@ -112,6 +112,7 @@ class RenoCongestionControl(QuicCongestionControl):
         for packet in packets:
             self.bytes_in_flight -= packet.sent_bytes
             lost_largest_time = packet.sent_time
+            # monitoring
             self.lost_byte_in_interval += packet.sent_bytes * (
                 self.rtt_estimate / self.sampling_interval
             )
@@ -135,6 +136,7 @@ class RenoCongestionControl(QuicCongestionControl):
         ):
             self.ssthresh = self.congestion_window
 
+        # monitoring
         self.rtt_estimate = rtt
 
 
