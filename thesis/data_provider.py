@@ -3,12 +3,15 @@ import asyncio
 
 """
     Simulates an application providing data to the protocol.
-    Pushes dummy data into the queue at [data_rate] MB/s.
+    Pushes dummy data into the queue at [rate_mbit] mbit/s.
 """
 
 
-async def provider(queue, data_rate, iterations, subchunks):
-    chunk_size = data_rate * int(125000 / subchunks)
+async def provider(queue, configuration):
+    rate = int(configuration["provider"]["rate_mbit"])
+    subchunks = int(configuration["provider"]["granularity"])
+    iterations = int(configuration["provider"]["iterations"])
+    chunk_size = rate * int(1000000 / subchunks)
     counter = 0
     payload = "Data".ljust(chunk_size, "X")
 

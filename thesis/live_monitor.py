@@ -1,3 +1,4 @@
+import argparse
 from collections import deque
 import os
 import signal
@@ -13,8 +14,12 @@ import zmq
 
 from AnalyzerUnit import AnalyzerUnit
 
+parser = argparse.ArgumentParser()
+parser.add_argument("--config", required=True)
+args = parser.parse_args()
+
 config = None
-with open("config_periodic.toml", "rb") as f:
+with open(args.config, "rb") as f:
     config = tomllib.load(f)
     print("config read @monitor")
 
@@ -67,7 +72,7 @@ process = [None]
 def run_client():
     if process[0] is None or process[0].poll() is not None:
         process[0] = subprocess.Popen(
-            ["bash", "./client_start.sh"], preexec_fn=os.setsid
+            ["bash", "./client_start.sh", args.config], preexec_fn=os.setsid
         )
         print("Shell script started as standalone process")
     else:

@@ -23,4 +23,5 @@ left = ["rtt"]
 
 [provider]
 rate_mbit = 10
-granularity = 10
+granularity = 100
+iterations=650
