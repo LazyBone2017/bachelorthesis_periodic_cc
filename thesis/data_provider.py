@@ -18,7 +18,9 @@ async def provider(queue, configuration):
 
     if single_file_mode:
         filesize = int(configuration["provider"]["single_file_size_mbit"])
-        queue.put_nowait("Data".ljust(filesize * 125000, "X"))
+        marker = "!"
+        payload_size = filesize * 125000
+        queue.put_nowait("?".ljust(payload_size - len(marker), "X") + marker)
         return
 
     while True:

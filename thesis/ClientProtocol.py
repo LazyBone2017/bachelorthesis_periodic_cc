@@ -10,7 +10,7 @@ class ClientProtocol(QuicConnectionProtocol):
         if isinstance(event, HandshakeCompleted):
             print("[client] Handshake completed successfully.")
 
-    async def send_data(self, stream_id, data):
+    """async def send_data(self, stream_id, data):
         self._quic.send_stream_data(stream_id, data.encode(), end_stream=False)
         self.transmit()
-        # print(f"[client] Sent data: {len(data)} Bytes")
+        # print(f"[client] Sent data: {len(data)} Bytes")"""

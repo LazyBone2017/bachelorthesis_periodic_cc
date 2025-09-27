@@ -4,7 +4,7 @@ from aioquic.asyncio.client import connect
 from aioquic.quic.configuration import QuicConfiguration
 from ClientProtocol import ClientProtocol
 
-N_STREAMS = 10
+N_STREAMS = 1
 
 
 class QuicClient:
@@ -31,6 +31,7 @@ class QuicClient:
             external_config=self.external_config,
         ) as connection:
             print("[client] Connected to server.")
+            print(time.monotonic())
             streams = []
             stream_selected = 0
             for i in range(N_STREAMS):

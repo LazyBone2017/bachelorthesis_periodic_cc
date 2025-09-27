@@ -28,8 +28,8 @@ left = ["rtt"]
 
 
 [provider]
-single_file_mode = false
-single_file_size_mbit = 100
+single_file_mode = true
+single_file_size_mbit = 1000
 
 rate_mbit = 10
 granularity = 100

@@ -60,7 +60,7 @@ axes["left"].set_ylim(0, 1)
 (lines[("loss", "right")],) = axes["right"].plot([], [], label="Loss %")
 
 axes["ratio"].set_ylim(0, 1)
-axes["right"].set_ylim(0, 1)
+axes["right"].set_ylim(0, 0.1)
 
 axes["ratio"].legend(loc=2)
 axes["right"].legend(loc=2)
@@ -159,7 +159,7 @@ def update(i):
     )
     lines["loss", "right"].set_data(
         np.arange(len(_analyzer_unit._loss_rate)),
-        np.array(_analyzer_unit._loss_rate) * 10,
+        np.array(_analyzer_unit._loss_rate),
     )
 
     axes["right"].autoscale_view()
