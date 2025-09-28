@@ -171,9 +171,10 @@ class PeriodicCongestionControl(QuicCongestionControl):
                         self._analyzer_unit._congwin_to_response_ratio, 25
                     )
                     if mean > 0.5:
+                        print(self._base_cwnd)
                         self.change_operation_state(OperationState.STEP_DOWN)
                 case OperationState.STATIC:
-                    print("LOSS", (self._analyzer_unit._loss_rate[-1]))
+                    # print("LOSS", (self._analyzer_unit._loss_rate[-1]))
                     # mean = np.mean(self._analyzer_unit._congwin_to_response_ratio)
                     mean = np.percentile(
                         self._analyzer_unit._congwin_to_response_ratio, 25
@@ -225,25 +226,14 @@ class PeriodicCongestionControl(QuicCongestionControl):
 
             await asyncio.sleep(self.sampling_interval)
 
-    def rect_mod(self, sine):
-        return 1 if sine >= 0 else -1
-
-    def calculate_cwnd_base_from_bdp(self, bdp_estimate, cutoff_fraction):
-        base = bdp_estimate / (
-            1 + self._base_to_amplitude_ratio * (1 - cutoff_fraction)
-        )
-        print("BDP ESTIMATE:", bdp_estimate)
-        print("SETTING BASE: ", self._base_cwnd, flush=True)
-        return base
-
     async def modulate_congestion_window(self):
         while True:
             delta_t = time.monotonic() - self._start_time
             sine_component = math.sin(2 * math.pi * self._frequency * delta_t)
 
             amplitude = self._base_cwnd * self._base_to_amplitude_ratio
-            if sine_component < 0:
-                amplitude * 1.25
+            """if sine_component < 0:
+                amplitude * 1.25"""
             self.congestion_window = int(self._base_cwnd + amplitude * sine_component)
 
             await asyncio.sleep(self.sampling_interval)
@@ -266,10 +256,8 @@ class PeriodicCongestionControl(QuicCongestionControl):
             self.bytes_in_flight -= packet.sent_bytes
 
     def on_packets_lost(self, *, now: float, packets: Iterable[QuicSentPacket]) -> None:
-        lost_largest_time = 0.0
         for packet in packets:
             self.bytes_in_flight -= packet.sent_bytes
-            lost_largest_time = packet.sent_time
             self.lost_byte_in_interval += packet.sent_bytes * (
                 self.rtt_estimate / self.sampling_interval
             )
