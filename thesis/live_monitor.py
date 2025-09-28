@@ -54,13 +54,13 @@ for ax in config["monitor"]["composition"]:
 
     axes[ax].legend(loc=2)
 
-axes["left"].set_ylim(0, 1)
+axes["left"].set_ylim(0, 0.5)
 
 (lines[("crr", "ratio")],) = axes["ratio"].plot([], [], label="cwnd_resp_ratio")
 (lines[("loss", "right")],) = axes["right"].plot([], [], label="Loss %")
 
 axes["ratio"].set_ylim(0, 1)
-axes["right"].set_ylim(0, 1)
+axes["right"].set_ylim(0, 1.5)
 
 axes["ratio"].legend(loc=2)
 axes["right"].legend(loc=2)
@@ -159,8 +159,8 @@ def update(i):
     )
     lines["loss", "right"].set_data(
         np.arange(len(_analyzer_unit._loss_rate)),
-        np.array(_analyzer_unit._loss_rate) * 10,
-    )
+        np.array(_analyzer_unit._loss_rate) * 100,
+    )  # convert to percent
 
     axes["right"].autoscale_view()
     axes["ratio"].autoscale_view()

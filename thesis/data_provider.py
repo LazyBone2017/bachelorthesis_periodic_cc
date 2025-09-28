@@ -11,9 +11,17 @@ async def provider(queue, configuration):
     rate = int(configuration["provider"]["rate_mbit"])
     subchunks = int(configuration["provider"]["granularity"])
     iterations = int(configuration["provider"]["iterations"])
-    chunk_size = rate * int(1000000 / subchunks)
+    single_file_mode = configuration["provider"]["single_file_mode"]
+    chunk_size = rate * int(125000 / subchunks)
     counter = 0
     payload = "Data".ljust(chunk_size, "X")
+
+    if single_file_mode:
+        filesize = int(configuration["provider"]["single_file_size_mbit"])
+        marker = "!"
+        payload_size = filesize * 125000
+        queue.put_nowait("?".ljust(payload_size - len(marker), "X") + marker)
+        return
 
     while True:
         queue.put_nowait(payload)
