@@ -36,8 +36,7 @@ SAVED = False
 class OperationState(Enum):
     STARTUP = auto()
     INCREASE = auto()
-    STEP_UP = auto()
-    STEP_DOWN = auto()
+    CORRECT = auto()
     STATIC = auto()
     SENSE = auto()
 
@@ -172,7 +171,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
                     )
                     if mean > 0.5:
                         print(self._base_cwnd)
-                        self.change_operation_state(OperationState.STEP_DOWN)
+                        self.change_operation_state(OperationState.CORRECT)
                 case OperationState.STATIC:
                     # print("LOSS", (self._analyzer_unit._loss_rate[-1]))
                     mean = np.mean(self._analyzer_unit._congwin_to_response_ratio)
@@ -181,25 +180,23 @@ class PeriodicCongestionControl(QuicCongestionControl):
                         self.supressed_loss == 0
                         or not self.shallow_buffer_mitigation_active
                     ):
-                        self.change_operation_state(OperationState.STEP_UP)
+                        self.change_operation_state(OperationState.CORRECT)
                     elif mean > 0.5:
-                        self.change_operation_state(OperationState.STEP_DOWN)
+                        self.change_operation_state(OperationState.CORRECT)
                     elif (
                         self._analyzer_unit._loss_rate[-1] > 0
                         and self.shallow_buffer_mitigation_active
                     ):
                         self.change_operation_state(OperationState.SENSE)
-                case OperationState.STEP_UP:
-                    self._base_cwnd = max(self._analyzer_unit.metrics["acked_byte"])
-                    print("STEP_UP: BASE SET TO:", self._base_cwnd)
-
-                    self.change_operation_state(OperationState.SENSE)
-                case OperationState.STEP_DOWN:
-
+                case OperationState.CORRECT:
                     base = self._analyzer_unit.get_bdp_estimate()
                     if base is not None:
+                        print(
+                            "STEP DOWN" if self._base_cwnd > base else "STEP UP",
+                            "BASE SET TO:",
+                            self._base_cwnd,
+                        )
                         self._base_cwnd = base
-                    print("STEP_DOWN: BASE SET TO:", self._base_cwnd)
                     self.change_operation_state(OperationState.SENSE)
                 case OperationState.SENSE:
                     self.rtt_estimate = self._analyzer_unit.get_rtt_estimate()
@@ -213,10 +210,6 @@ class PeriodicCongestionControl(QuicCongestionControl):
                             print("supressed", self.supressed_loss)
                         self._base_cwnd *= 0.99
                         print("SENSE: BASE SET TO:", self._base_cwnd)
-                    """self._base_to_amplitude_ratio = (
-                        self._analyzer_unit.get_base_to_amplitude_ratio("SENSE")
-                    )"""
-
                     if self.state_active_over(
                         self._analyzer_unit.input_queue.maxlen * self.sampling_interval
                     ):

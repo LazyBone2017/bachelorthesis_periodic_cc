@@ -94,8 +94,6 @@ class AnalyzerUnit:
     def get_bdp_estimate(self):
         if len(self.metrics["acked_byte"]) == 0:
             return
-
-        print("ESTIMATE", np.max(self.metrics["acked_byte"]))
         return np.max(self.metrics["acked_byte"])
 
     def generate_loss_rate(self):
