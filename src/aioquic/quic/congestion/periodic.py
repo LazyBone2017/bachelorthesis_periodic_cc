@@ -194,7 +194,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
                         print(
                             "STEP DOWN" if self._base_cwnd > base else "STEP UP",
                             "BASE SET TO:",
-                            self._base_cwnd,
+                            base,
                         )
                         self._base_cwnd = base
                     self.change_operation_state(OperationState.SENSE)
