@@ -175,10 +175,8 @@ class PeriodicCongestionControl(QuicCongestionControl):
                         self.change_operation_state(OperationState.STEP_DOWN)
                 case OperationState.STATIC:
                     # print("LOSS", (self._analyzer_unit._loss_rate[-1]))
-                    # mean = np.mean(self._analyzer_unit._congwin_to_response_ratio)
-                    mean = np.percentile(
-                        self._analyzer_unit._congwin_to_response_ratio, 25
-                    )
+                    mean = np.mean(self._analyzer_unit._congwin_to_response_ratio)
+                    # (max_v, min_v) = self._analyzer_unit.get_R_extrema()
                     if mean < 0.4 and (
                         self.supressed_loss == 0
                         or not self.shallow_buffer_mitigation_active
@@ -192,7 +190,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
                     ):
                         self.change_operation_state(OperationState.SENSE)
                 case OperationState.STEP_UP:
-                    self._base_cwnd = max(self._analyzer_unit._acks_in_process)
+                    self._base_cwnd = max(self._analyzer_unit.metrics["acked_byte"])
                     print("STEP_UP: BASE SET TO:", self._base_cwnd)
 
                     self.change_operation_state(OperationState.SENSE)
