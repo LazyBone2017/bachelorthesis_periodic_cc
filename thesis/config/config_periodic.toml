@@ -6,11 +6,11 @@ mod_rate = 1
 cwnd_base_0 = 1200
 base_to_amplitude_ratio = 0.25
 sampling_rate = 5
-transferred_metrics = ["cwnd", "acked_byte", "sent_byte", "rtt", "cwnd_base", "lost_byte"]
+transferred_metrics = ["cwnd", "acked_byte", "sent_byte", "rtt", "lost_byte", "cwnd_base"]
 shallow_buffer_mitigation = false
 
 [out]
-out_after = 200
+out_after = 80
 filename = "data_output"
 
 [monitor.units]
