@@ -5,12 +5,11 @@ import time
 
 import zmq
 
-RAW_LOG = []
-SCALED_LOG = []
-
 
 class TimestampLogger:
     def __init__(self, ui_out, external_config, algo_instance):
+        self.RAW_LOG = []
+        self.SCALED_LOG = []
         self.ui_out = ui_out
         if ui_out:
             self.socket = zmq.Context().socket(zmq.PUSH)
@@ -74,25 +73,26 @@ class TimestampLogger:
             if self.direct_out is not None:
                 self.direct_out(timestamp)
 
-            SCALED_LOG.append(timestamp)
+            self.SCALED_LOG.append(timestamp)
 
             # edit timestamp for raw data
-            timestamp[1] = self.algo_instance.get_acked_byte_raw()
-            timestamp[2] = self.algo_instance.get_sent_byte_raw()
-            timestamp[4] = self.algo_instance.get_lost_byte_raw()
-            RAW_LOG.append(timestamp)
+            timestamp_raw = timestamp.copy()
+            timestamp_raw[2] = self.algo_instance.get_acked_byte_raw()
+            timestamp_raw[3] = self.algo_instance.get_sent_byte_raw()
+            timestamp_raw[5] = self.algo_instance.get_lost_byte_raw()
+            self.RAW_LOG.append(timestamp_raw)
             if (
                 delta_t > self.csv_length
                 or (delta_t > 2 and self.get_metric("acked_byte") == 0)
             ) and not self.saved:
                 self.save_to_csv(
                     "../data_out/" + self.csv_name + "_raw",
-                    RAW_LOG,
+                    self.RAW_LOG,
                     ["delta_t"] + self.external_config["cca"]["transferred_metrics"],
                 )
                 self.save_to_csv(
                     "../data_out/" + self.csv_name + "_scaled",
-                    SCALED_LOG,
+                    self.SCALED_LOG,
                     ["delta_t"] + self.external_config["cca"]["transferred_metrics"],
                 )
                 self.saved = True
