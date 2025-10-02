@@ -41,9 +41,9 @@ class OperationState(Enum):
     SENSE = auto()
 
 
-class PeriodicCongestionControl(QuicCongestionControl):
+class PulseCongestionControl(QuicCongestionControl):
     """
-    New Periodic congestion control.
+    New PULSE congestion control.
     """
 
     def __init__(self, *, max_datagram_size: int, external_config) -> None:
@@ -123,7 +123,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
         c.add_done_callback(
             lambda t: print("TASK FINISHED:", t, "EXCEPTION:", t.exception())
         )
-        print("config read @periodic")
+        print("config read @PULSE")
 
     # RTT shold be determine sampling interval
     # Mod Freq determines modulation interval
@@ -281,4 +281,4 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self.latest_rtt = rtt
 
 
-register_congestion_control("periodic", PeriodicCongestionControl)
+register_congestion_control("pulse", PulseCongestionControl)

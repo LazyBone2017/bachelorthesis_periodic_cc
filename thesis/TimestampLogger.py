@@ -49,13 +49,16 @@ class TimestampLogger:
         self.direct_out = direct_out
 
     def save_to_csv(self, filename, data, header=None):
-        print("CWD:", os.getcwd())
+        directory = os.path.dirname(filename)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+
         with open(filename + ".csv", mode="w", newline="") as f:
             writer = csv.writer(f)
             if header:
                 writer.writerow(header)
             writer.writerows(data)
-        print("WRITTEN to file")
+        print(f"Output written to: {filename}")
 
     async def pass_timestamps(self):
         while True:
@@ -85,13 +88,16 @@ class TimestampLogger:
                 delta_t > self.csv_length
                 or (delta_t > 2 and self.get_metric("acked_byte") == 0)
             ) and not self.saved:
+                filename_base = (
+                    f"../data_out/{self.external_config["cca"]["name"]}/{self.csv_name}"
+                )
                 self.save_to_csv(
-                    "../data_out/" + self.csv_name + "_raw",
+                    filename_base + "_raw",
                     self.RAW_LOG,
                     ["delta_t"] + self.external_config["cca"]["transferred_metrics"],
                 )
                 self.save_to_csv(
-                    "../data_out/" + self.csv_name + "_scaled",
+                    filename_base + "_scaled",
                     self.SCALED_LOG,
                     ["delta_t"] + self.external_config["cca"]["transferred_metrics"],
                 )

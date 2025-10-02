@@ -1,7 +1,7 @@
 version = 1
 
 [cca]
-name = "periodic"
+name = "pulse"
 mod_rate = 1
 cwnd_base_0 = 1200
 base_to_amplitude_ratio = 0.25
