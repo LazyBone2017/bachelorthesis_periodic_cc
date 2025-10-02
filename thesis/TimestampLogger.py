@@ -5,11 +5,11 @@ import time
 
 import zmq
 
-LOG = []
-
 
 class TimestampLogger:
-    def __init__(self, ui_out, external_config):
+    def __init__(self, ui_out, external_config, algo_instance):
+        self.RAW_LOG = []
+        self.SCALED_LOG = []
         self.ui_out = ui_out
         if ui_out:
             self.socket = zmq.Context().socket(zmq.PUSH)
@@ -23,6 +23,7 @@ class TimestampLogger:
         self.csv_name = external_config["out"]["filename"]
         self.external_config = external_config
         self.threshold = 0
+        self.algo_instance = algo_instance
 
     def register_metric(self, name: str, func, cleanup_function=None):
         if name in self.registry:
@@ -47,10 +48,12 @@ class TimestampLogger:
     def set_direct_out(self, direct_out):
         self.direct_out = direct_out
 
-    def save_to_csv(self, filename, data):
+    def save_to_csv(self, filename, data, header=None):
         print("CWD:", os.getcwd())
         with open(filename + ".csv", mode="w", newline="") as f:
             writer = csv.writer(f)
+            if header:
+                writer.writerow(header)
             writer.writerows(data)
         print("WRITTEN to file")
 
@@ -69,9 +72,29 @@ class TimestampLogger:
                 self.socket.send_json(timestamp)
             if self.direct_out is not None:
                 self.direct_out(timestamp)
-            LOG.append(timestamp)
-            if delta_t > self.csv_length and not self.saved:
-                self.save_to_csv("../data_out/" + self.csv_name, LOG)
+
+            self.SCALED_LOG.append(timestamp)
+
+            # edit timestamp for raw data
+            timestamp_raw = timestamp.copy()
+            timestamp_raw[2] = self.algo_instance.get_acked_byte_raw()
+            timestamp_raw[3] = self.algo_instance.get_sent_byte_raw()
+            timestamp_raw[5] = self.algo_instance.get_lost_byte_raw()
+            self.RAW_LOG.append(timestamp_raw)
+            if (
+                delta_t > self.csv_length
+                or (delta_t > 2 and self.get_metric("acked_byte") == 0)
+            ) and not self.saved:
+                self.save_to_csv(
+                    "../data_out/" + self.csv_name + "_raw",
+                    self.RAW_LOG,
+                    ["delta_t"] + self.external_config["cca"]["transferred_metrics"],
+                )
+                self.save_to_csv(
+                    "../data_out/" + self.csv_name + "_scaled",
+                    self.SCALED_LOG,
+                    ["delta_t"] + self.external_config["cca"]["transferred_metrics"],
+                )
                 self.saved = True
             for name in self.external_config["cca"]["transferred_metrics"]:
                 self.run_metric_cleanup(name)

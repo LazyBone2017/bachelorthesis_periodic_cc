@@ -7,9 +7,6 @@ import scipy
 import scipy.signal
 
 
-# unit holds a single version of all processing applied _acks_in_process, saving intermediary states in dedicated fields
-
-
 class AnalyzerUnit:
     def __init__(
         self,
@@ -30,8 +27,6 @@ class AnalyzerUnit:
         self.input_queue = deque(
             maxlen=int(self.sampling_rate / self.modulation_frequency * 2)
         )
-
-        self._acks_in_process = [0] * self.input_queue.maxlen
 
         self._delta_t_uniform = [0] * self.input_queue.maxlen
         self._filtered_acks = [0] * self.input_queue.maxlen
@@ -66,10 +61,10 @@ class AnalyzerUnit:
             return 0.5  # fallback, is this good?
 
     def apply_interpolation(self):
-        if len(self._acks_in_process) == 0:
+        if len(self.metrics["acked_byte"]) == 0:
             return
         self._interpolated_acks = np.interp(
-            self._delta_t_uniform, self.metrics["delta_t"], self._acks_in_process
+            self._delta_t_uniform, self.metrics["delta_t"], self.metrics["acked_byte"]
         )
         return self._interpolated_acks
 
@@ -78,8 +73,8 @@ class AnalyzerUnit:
         if (
             self.metrics["cwnd"] is None
             or len(self.metrics["cwnd"]) == 0
-            or self._acks_in_process is None
-            or len(self._acks_in_process) == 0
+            or self.metrics["acked_byte"] is None
+            or len(self.metrics["acked_byte"]) == 0
             or self.metrics.get("cwnd_base", [1])[-1] is None
         ):
             self._congwin_to_response_ratio.append(0.5)
@@ -88,7 +83,7 @@ class AnalyzerUnit:
         # get max delta values of cwnd and response
 
         self._congwin_to_response_ratio.append(
-            (max(self.metrics["cwnd"]) - max(self._acks_in_process))
+            (max(self.metrics["cwnd"]) - max(self.metrics["acked_byte"]))
             / (
                 2
                 * self.metrics.get("cwnd_base", [1])[-1]
@@ -97,11 +92,9 @@ class AnalyzerUnit:
         )
 
     def get_bdp_estimate(self):
-        if len(self._acks_in_process) == 0:
+        if len(self.metrics["acked_byte"]) == 0:
             return
-
-        print("ESTIMATE", np.max(self._acks_in_process))
-        return np.max(self._acks_in_process)
+        return np.max(self.metrics["acked_byte"])
 
     def generate_loss_rate(self):
         rate = sum(self.metrics["lost_byte"], 0) / sum(self.metrics["sent_byte"], 1)
@@ -130,12 +123,8 @@ class AnalyzerUnit:
         }
 
         self.update_rtt(self.metrics["rtt"])
-        self.gen_uniform_delta_t()
-        self._acks_in_process = self.metrics["acked_byte"]
-        self._acks_in_process = self.apply_interpolation()
         self.generate_congwin_to_response_ratio()
         self.generate_loss_rate()
 
-    # TODO average this in a probing manner for later
     def update_rtt(self, latest_rtt):
-        self._rtt_estimate = min(latest_rtt)
+        self._rtt_estimate = np.min(latest_rtt)

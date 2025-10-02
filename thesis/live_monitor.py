@@ -91,15 +91,12 @@ def stop_client():
 
 def handle_start_button(event):
     if process[0] is None:
-
         run_client()
+        start_button.label.set_text("Running...\nPress to Stop")
     else:
         stop_client()
-
-
-def clear(event):
-    _analyzer_unit.input_queue.clear()
-    update(True)
+        _analyzer_unit.input_queue.clear()
+        start_button.label.set_text("Run")
 
 
 def on_close(event):
@@ -108,35 +105,29 @@ def on_close(event):
 
 
 fig.canvas.mpl_connect("close_event", on_close)
-start_button_ax = fig.add_axes([0.8, 0.05, 0.1, 0.075])
-start_button = Button(start_button_ax, "Run / Stop)")
+start_button_ax = fig.add_axes([0.8, 0.01, 0.1, 0.075])
+start_button = Button(start_button_ax, "Run")
 start_button.on_clicked(handle_start_button)
 
-clear_button_ax = fig.add_axes([0.7, 0.05, 0.1, 0.075])
-clear_button = Button(clear_button_ax, "Clear")
-clear_button.on_clicked(clear)
+plt.get_current_fig_manager().toolbar.pack_forget()
 
 
 class DataReceiver:
     def __init__(self):
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.PULL)
-        self.socket.bind("tcp://127.0.0.1:5555")  # binds for incoming PUSH connections
+        self.socket.bind("tcp://127.0.0.1:5555")
 
     def update_source(self):
-        # ack_buffer = deque(maxlen=3)
         while True:
             try:
                 data = self.socket.recv_json(flags=zmq.NOBLOCK)
-                # ack_buffer.append(data[2])
-                # data.append(sum(ack_buffer) / len(ack_buffer))
-                # data.append(data[2])
                 _analyzer_unit.input_queue.append(data)
                 save_log.append(data)
                 time.sleep(0.1)
             except zmq.Again:
                 time.sleep(0.1)
-                # No message ready
+                # no message ready
                 pass
 
 
