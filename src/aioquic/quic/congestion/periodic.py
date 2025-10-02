@@ -71,13 +71,18 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self.acked_bytes_in_interval = 0
         self.sent_bytes_in_interval = 0
         self.lost_byte_in_interval = 0
+
+        self.acked_byte_raw = 0
+        self.sent_byte_raw = 0
+        self.lost_byte_raw = 0
+
         self._operation_state = OperationState.STARTUP
         self.state_start_t = time.monotonic()
         self.supressed_loss = 0
         self.saved = False
         self.threshold = 0
         self.logger = TimestampLogger.TimestampLogger(
-            ui_out=True, external_config=external_config
+            ui_out=True, external_config=external_config, algo_instance=self
         )
 
         self._analyzer_unit = AnalyzerUnit(
@@ -122,6 +127,21 @@ class PeriodicCongestionControl(QuicCongestionControl):
 
     # RTT shold be determine sampling interval
     # Mod Freq determines modulation interval
+
+    def get_acked_byte_raw(self):
+        temp = self.acked_byte_raw
+        self.acked_byte_raw = 0
+        return temp
+
+    def get_sent_byte_raw(self):
+        temp = self.sent_byte_raw
+        self.sent_byte_raw = 0
+        return temp
+
+    def get_lost_byte_raw(self):
+        temp = self.lost_byte_raw
+        self.lost_byte_raw = 0
+        return temp
 
     def reset_acked_byte(self):
         self.acked_bytes_in_interval = 0
@@ -234,12 +254,15 @@ class PeriodicCongestionControl(QuicCongestionControl):
         self.acked_bytes_in_interval += packet.sent_bytes * (
             self.rtt_estimate / self.sampling_interval
         )
+        self.acked_byte_raw += packet.sent_bytes
 
     def on_packet_sent(self, *, packet: QuicSentPacket) -> None:
         self.bytes_in_flight += packet.sent_bytes
         self.sent_bytes_in_interval += packet.sent_bytes * (
             self.rtt_estimate / self.sampling_interval
         )
+
+        self.sent_byte_raw += packet.sent_bytes
 
     def on_packets_expired(self, *, packets: Iterable[QuicSentPacket]) -> None:
         print("Expired")
@@ -252,6 +275,7 @@ class PeriodicCongestionControl(QuicCongestionControl):
             self.lost_byte_in_interval += packet.sent_bytes * (
                 self.rtt_estimate / self.sampling_interval
             )
+            self.lost_byte_raw += packet.sent_bytes
 
     def on_rtt_measurement(self, *, now: float, rtt: float) -> None:
         self.latest_rtt = rtt
