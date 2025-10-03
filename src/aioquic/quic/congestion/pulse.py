@@ -66,7 +66,7 @@ class PulseCongestionControl(QuicCongestionControl):
         ]
 
         self.rtt_estimate = 0.1
-        self.latest_rtt = 1
+        self.latest_rtt = 0.1
 
         self.acked_bytes_in_interval = 0
         self.sent_bytes_in_interval = 0
