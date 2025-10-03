@@ -23,4 +23,5 @@ secrets.log
 *.csv
 *.json
 
-/thesis/data_out
+/thesis/data_out/test_analyzer.py
+/thesis/data_out/test_plotter.py
