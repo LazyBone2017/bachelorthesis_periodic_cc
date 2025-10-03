@@ -7,7 +7,7 @@ transferred_metrics = ["cwnd", "acked_byte", "sent_byte", "rtt", "lost_byte"]
 
 [out]
 out_after = 200
-filename = "data_output"
+filename = "single_file_test_9"
 
 [monitor.units]
 cwnd = "byte"

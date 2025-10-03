@@ -20,7 +20,6 @@ env.bak/
 venv.bak/
 
 secrets.log
-*.csv
 *.json
 
 /thesis/data_out/test_analyzer.py
