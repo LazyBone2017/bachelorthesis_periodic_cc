@@ -65,8 +65,8 @@ class PulseCongestionControl(QuicCongestionControl):
             "shallow_buffer_mitigation"
         ]
 
-        self.rtt_estimate = 0.1
-        self.latest_rtt = 0.1
+        self.rtt_estimate = 0.2  # set this for testing
+        self.latest_rtt = 0.2  #
 
         self.acked_bytes_in_interval = 0
         self.sent_bytes_in_interval = 0
