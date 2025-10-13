@@ -90,7 +90,7 @@ class TimestampLogger:
                 not self.single_file_mode
                 and (delta_t > self.csv_length)
                 or self.single_file_mode
-                and (delta_t > 2 and self.get_metric("acked_byte") == 0)
+                and (delta_t > 10 and self.get_metric("acked_byte") == 0)
             ) and not self.saved:
                 filename_base = (
                     f"../data_out/{self.external_config["cca"]["name"]}/{self.csv_name}"
