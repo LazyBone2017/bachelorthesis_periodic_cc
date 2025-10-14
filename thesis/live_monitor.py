@@ -5,7 +5,10 @@ import signal
 import subprocess
 import threading
 import time
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 from matplotlib import pyplot as plt
 from matplotlib import animation
 from matplotlib.widgets import Button
