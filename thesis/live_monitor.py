@@ -5,6 +5,7 @@ import signal
 import subprocess
 import threading
 import time
+
 try:
     import tomllib
 except ModuleNotFoundError:
@@ -112,7 +113,10 @@ start_button_ax = fig.add_axes([0.8, 0.01, 0.1, 0.075])
 start_button = Button(start_button_ax, "Run")
 start_button.on_clicked(handle_start_button)
 
-plt.get_current_fig_manager().toolbar.pack_forget()
+manager = plt.get_current_fig_manager()
+toolbar = getattr(manager, "toolbar", None)
+if toolbar is not None and hasattr(toolbar, "pack_forget"):
+    toolbar.pack_forget()
 
 
 class DataReceiver:
