@@ -48,7 +48,7 @@ lines = {}
 for ax in config["monitor"]["composition"]:
     for metric in config["monitor"]["composition"][ax]:
         (line,) = axes[ax].plot(
-            [], [], label=f"{metric}({config["monitor"]["units"][metric]})"
+            [], [], label=f"{metric}({config['monitor']['units'][metric]})"
         )
         lines[(metric, ax)] = line
 
