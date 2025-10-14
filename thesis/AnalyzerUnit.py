@@ -76,6 +76,7 @@ class AnalyzerUnit:
             or self.metrics["acked_byte"] is None
             or len(self.metrics["acked_byte"]) == 0
             or self.metrics.get("cwnd_base", [1])[-1] is None
+            or max(self.metrics["acked_byte"]) == 0
         ):
             self._congwin_to_response_ratio.append(0.5)
             return

@@ -7,7 +7,7 @@ transferred_metrics = ["cwnd", "acked_byte", "sent_byte", "rtt", "lost_byte"]
 
 [out]
 out_after = 200
-filename = "data_output"
+filename = "single_file_test_0"
 
 [monitor.units]
 cwnd = "byte"
@@ -17,13 +17,13 @@ rtt = "s"
 
 [monitor.composition]
 in = ["cwnd", "sent_byte"]
-out = ["acked_byte"]
+out = [] #redundant
 left = ["rtt"]
 
 
 [provider]
 single_file_mode = true
-single_file_size_mbit = 500
+single_file_size_mbit = 1000
 
 rate_mbit = 10
 granularity = 100
