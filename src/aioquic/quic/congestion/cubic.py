@@ -51,11 +51,14 @@ class CubicCongestionControl(QuicCongestionControl):
         self.sent_bytes_in_interval = 0
         self.lost_byte_in_interval = 0
 
+        self.acked_byte_raw = 0
+        self.sent_byte_raw = 0
+        self.lost_byte_raw = 0
+
         self.rtt_estimate = 1
         self.sampling_interval = 1 / float(external_config["cca"]["sampling_rate"])
         self.logger = TimestampLogger.TimestampLogger(
-            ui_out=True,
-            external_config=external_config,
+            ui_out=True, external_config=external_config, algo_instance=self
         )
 
         self.logger.register_metric("cwnd", lambda: self.congestion_window)
@@ -80,6 +83,21 @@ class CubicCongestionControl(QuicCongestionControl):
         t.add_done_callback(
             lambda t: print("TASK FINISHED:", t, "EXCEPTION:", t.exception())
         )
+
+    def get_acked_byte_raw(self):
+        temp = self.acked_byte_raw
+        self.acked_byte_raw = 0
+        return temp
+
+    def get_sent_byte_raw(self):
+        temp = self.sent_byte_raw
+        self.sent_byte_raw = 0
+        return temp
+
+    def get_lost_byte_raw(self):
+        temp = self.lost_byte_raw
+        self.lost_byte_raw = 0
+        return temp
 
     def reset_acked_byte(self):
         self.acked_bytes_in_interval = 0
@@ -121,6 +139,7 @@ class CubicCongestionControl(QuicCongestionControl):
         self.acked_bytes_in_interval += packet.sent_bytes * (
             self.rtt_estimate / self.sampling_interval
         )
+        self.acked_byte_raw += packet.sent_bytes
 
         if self.ssthresh is None or self.congestion_window < self.ssthresh:
             # slow start
@@ -205,6 +224,8 @@ class CubicCongestionControl(QuicCongestionControl):
             self.rtt_estimate / self.sampling_interval
         )
 
+        self.sent_byte_raw += packet.sent_bytes
+
         if self.last_ack == 0.0:
             return
         elapsed_idle = packet.sent_time - self.last_ack
@@ -224,6 +245,7 @@ class CubicCongestionControl(QuicCongestionControl):
             self.lost_byte_in_interval += packet.sent_bytes * (
                 self.rtt_estimate / self.sampling_interval
             )
+            self.lost_byte_raw += packet.sent_bytes
 
         # start a new congestion event if packet was sent after the
         # start of the previous congestion recovery period.
@@ -263,7 +285,7 @@ class CubicCongestionControl(QuicCongestionControl):
         ):
             self.ssthresh = self.congestion_window
 
-        #monitoring
+        # monitoring
         self.rtt_estimate = rtt
 
     def get_log_data(self) -> Dict[str, Any]:
