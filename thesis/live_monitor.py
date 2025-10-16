@@ -63,7 +63,7 @@ axes["left"].set_ylim(0, 0.5)
 (lines[("loss", "right")],) = axes["right"].plot([], [], label="Loss %")
 
 axes["ratio"].set_ylim(0, 1)
-axes["right"].set_ylim(0, 1.5)
+# axes["right"].set_ylim(bottom=0)
 
 axes["ratio"].legend(loc=2)
 axes["right"].legend(loc=2)

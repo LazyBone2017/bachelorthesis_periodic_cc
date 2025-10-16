@@ -99,6 +99,7 @@ class AnalyzerUnit:
 
     def generate_loss_rate(self):
         rate = sum(self.metrics["lost_byte"], 0) / sum(self.metrics["sent_byte"], 1)
+        # rate = self.metrics["lost_byte"][-1] / self.metrics["sent_byte"][-1]
         self._loss_rate.append(rate)
 
     def get_base_to_amplitude_ratio(self, state):

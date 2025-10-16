@@ -6,7 +6,7 @@ mod_rate = 1
 cwnd_base_0 = 1200
 base_to_amplitude_ratio = 0.25
 sampling_rate = 5
-initial_rtt = 0.1 #needs to be set to prevent algo from terminating INCREASE and test output distortion
+initial_rtt = 0.1 #needs to be set to prevent algo from terminating INCREASE
 transferred_metrics = ["cwnd", "acked_byte", "sent_byte", "rtt", "lost_byte", "cwnd_base"]
 shallow_buffer_mitigation = false
 
@@ -30,7 +30,7 @@ left = ["rtt"]
 
 [provider]
 single_file_mode = true
-single_file_size_mbit = 1000
+single_file_size_mbit = 500
 
 rate_mbit = 10
 granularity = 100
