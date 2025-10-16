@@ -22,8 +22,4 @@ venv.bak/
 secrets.log
 *.json
 
-/thesis/data_out/test_analyzer.py
-/thesis/data_out/test_plotter.py
-/thesis/data_out/bar_plotter.py
-/thesis/data_out/simpleCalc.py
-/thesis/data_out/test.py
+/thesis/data_out/algos
