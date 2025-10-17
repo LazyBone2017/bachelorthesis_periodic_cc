@@ -93,7 +93,7 @@ class TimestampLogger:
                 and (delta_t > 10 and self.get_metric("acked_byte") == 0)
             ) and not self.saved:
                 filename_base = (
-                    f"../data_out/{self.external_config["cca"]["name"]}/{self.csv_name}"
+                    f"../data_out/{self.external_config['cca']['name']}/{self.csv_name}"
                 )
                 self.save_to_csv(
                     filename_base + "_raw",

@@ -5,7 +5,10 @@ import signal
 import subprocess
 import threading
 import time
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 from matplotlib import pyplot as plt
 from matplotlib import animation
 from matplotlib.widgets import Button
@@ -48,7 +51,7 @@ lines = {}
 for ax in config["monitor"]["composition"]:
     for metric in config["monitor"]["composition"][ax]:
         (line,) = axes[ax].plot(
-            [], [], label=f"{metric}({config["monitor"]["units"][metric]})"
+            [], [], label=f"{metric}({config['monitor']['units'][metric]})"
         )
         lines[(metric, ax)] = line
 
@@ -60,7 +63,7 @@ axes["left"].set_ylim(0, 0.5)
 (lines[("loss", "right")],) = axes["right"].plot([], [], label="Loss %")
 
 axes["ratio"].set_ylim(0, 1)
-axes["right"].set_ylim(0, 1.5)
+# axes["right"].set_ylim(bottom=0)
 
 axes["ratio"].legend(loc=2)
 axes["right"].legend(loc=2)

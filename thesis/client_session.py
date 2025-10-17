@@ -1,5 +1,9 @@
 import asyncio
-import tomllib
+import time
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 import QuicClient
 import argparse
 from data_provider import provider
@@ -22,7 +26,7 @@ async def main():
     client = QuicClient.QuicClient(
         "10.0.0.2", 4433, send_data_queue, external_config=config
     )
-    
+
     provider_task = asyncio.create_task(provider(send_data_queue, configuration=config))
     client_task = asyncio.create_task(client.run())
 

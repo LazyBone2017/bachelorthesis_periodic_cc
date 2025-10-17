@@ -12,4 +12,12 @@ fi
 # 2. activate and install deps
 source .venv/bin/activate
 pip install --upgrade pip
+pip install -e .
 pip install -r requirements.txt
+
+if ! python3 -c "import tkinter" &>/dev/null; then
+  echo "Installing python3-tk for matplotlib GUI support (if available)..."
+  sudo apt-get update && sudo apt-get install -y python3-tk || echo "Skipping GUI backend (running headless)."
+fi
+
+echo "Environment set up successfully. Execute scripts in /thesis/config to run application."
