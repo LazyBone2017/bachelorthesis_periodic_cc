@@ -9,6 +9,8 @@ sampling_rate = 5
 initial_rtt = 0.1 #needs to be set to prevent algo from terminating INCREASE
 transferred_metrics = ["cwnd", "acked_byte", "sent_byte", "rtt", "lost_byte", "cwnd_base"]
 shallow_buffer_mitigation = false
+phi = 0.05
+increase_percentile = 25
 
 [out]
 out_after = 60

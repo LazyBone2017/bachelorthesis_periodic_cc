@@ -67,6 +67,8 @@ class PulseCongestionControl(QuicCongestionControl):
 
         self.rtt_estimate = external_config["cca"]["initial_rtt"]
         self.latest_rtt = external_config["cca"]["initial_rtt"]
+        self.phi = external_config["cca"]["phi"]
+        self.increase_percentile = external_config["cca"]["increase_percentile"]
 
         self.acked_bytes_in_interval = 0
         self.sent_bytes_in_interval = 0
@@ -154,7 +156,7 @@ class PulseCongestionControl(QuicCongestionControl):
 
     def get_cwnd_base_next_step(self):
         next = self._base_cwnd * (
-            1 + 2 * math.pi * self._base_to_amplitude_ratio * self._frequency * 0.05
+            1 + 2 * math.pi * self._base_to_amplitude_ratio * self._frequency * self.phi
         )
 
         return next
@@ -187,7 +189,7 @@ class PulseCongestionControl(QuicCongestionControl):
                 case OperationState.INCREASE:
                     self._base_cwnd = self.get_cwnd_base_next_step()
                     mean = np.percentile(
-                        self._analyzer_unit._congwin_to_response_ratio, 25
+                        self._analyzer_unit._congwin_to_response_ratio, self.increase_percentile
                     )
                     if mean > 0.5:
                         print(self._base_cwnd)
