@@ -66,7 +66,6 @@ axes["left"].set_xticks([])
 (lines[("loss", "right")],) = axes["right"].plot([], [], label="Loss %")
 
 axes["ratio"].set_ylim(0, 1)
-# axes["right"].set_ylim(bottom=0)
 
 axes["ratio"].legend(loc=2)
 axes["right"].legend(loc=2)
@@ -135,8 +134,6 @@ class DataReceiver:
                 time.sleep(0.1)
             except zmq.Again:
                 time.sleep(0.1)
-                # no message ready
-                pass
 
 
 def update(i):
@@ -155,15 +152,15 @@ def update(i):
                 _analyzer_unit.metrics["delta_t"][-1],
             )
 
-    crr = _analyzer_unit._congwin_to_response_ratio
+    crr = _analyzer_unit.congwin_to_response_ratio
     lines["crr", "ratio"].set_data(
         np.arange(len(crr)),
         crr,
     )
     lines["loss", "right"].set_data(
-        np.arange(len(_analyzer_unit._loss_rate)),
-        np.array(_analyzer_unit._loss_rate) * 100,
-    )  # convert to percent
+        np.arange(len(_analyzer_unit.loss_rate)),
+        np.array(_analyzer_unit.loss_rate) * 100,
+    )  # Convert to percent
 
     axes["right"].autoscale_view()
     axes["ratio"].autoscale_view()

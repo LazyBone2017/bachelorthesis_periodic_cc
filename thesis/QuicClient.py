@@ -51,9 +51,9 @@ class QuicClient:
                 )
                 await asyncio.sleep(0)
 
-            print("All done. Connection is being closed...")
+            print("[client] Finished. Connection is being closed...")
 
             connection.close()
             await connection.wait_closed()
 
-            print("Client Shutdown.")
+            print("[client] Client Shutdown.")
