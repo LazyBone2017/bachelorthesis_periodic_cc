@@ -5,6 +5,7 @@ import signal
 import subprocess
 import threading
 import time
+
 try:
     import tomllib
 except ModuleNotFoundError:
@@ -58,6 +59,8 @@ for ax in config["monitor"]["composition"]:
     axes[ax].legend(loc=2)
 
 axes["left"].set_ylim(0, 0.5)
+axes["out"].set_xticks([])
+axes["left"].set_xticks([])
 
 (lines[("crr", "ratio")],) = axes["ratio"].plot([], [], label="cwnd_resp_ratio")
 (lines[("loss", "right")],) = axes["right"].plot([], [], label="Loss %")
@@ -68,6 +71,8 @@ axes["ratio"].set_ylim(0, 1)
 axes["ratio"].legend(loc=2)
 axes["right"].legend(loc=2)
 
+axes["right"].set_xticks([])
+axes["ratio"].set_xticks([])
 
 process = [None]
 
@@ -136,15 +141,19 @@ class DataReceiver:
 
 def update(i):
     _analyzer_unit.update_processing()
-
     for ax in config["monitor"]["composition"]:
         for metric in config["monitor"]["composition"][ax]:
             lines[(metric, ax)].set_data(
                 _analyzer_unit.metrics["delta_t"], _analyzer_unit.metrics[metric]
             )
 
-        axes[ax].autoscale_view()
         axes[ax].relim()
+        axes[ax].autoscale_view(scalex=False, scaley=True)
+        if len(_analyzer_unit.input_queue) > 1:
+            axes[ax].set_xlim(
+                _analyzer_unit.metrics["delta_t"][0],
+                _analyzer_unit.metrics["delta_t"][-1],
+            )
 
     crr = _analyzer_unit._congwin_to_response_ratio
     lines["crr", "ratio"].set_data(

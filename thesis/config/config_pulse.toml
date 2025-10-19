@@ -1,19 +1,17 @@
-version = 1
-
 [cca]
-name = "pulse"
-mod_rate = 1
-cwnd_base_0 = 1200
-base_to_amplitude_ratio = 0.25
-sampling_rate = 5
-initial_rtt = 0.1 #needs to be set to prevent algo from terminating INCREASE
-transferred_metrics = ["cwnd", "acked_byte", "sent_byte", "rtt", "lost_byte", "cwnd_base"]
+name = "pulse"                                                                              # has to match cca key
+mod_rate = 1                                                                                # modulation frequency
+cwnd_base_0 = 1200                                                                          # initial cwnd size
+base_to_amplitude_ratio = 0.25                                                              # alpha
+sampling_rate = 5                                                                           
+initial_rtt = 0.1                                                                           #needs to be set to prevent algo from terminating INCREASE                
+transferred_metrics = ["cwnd", "acked_byte", "sent_byte", "rtt", "lost_byte", "cwnd_base"]  # timestamp metrics
 shallow_buffer_mitigation = false
-phi = 0.05
-increase_percentile = 25
-
-[out]
-out_after = 60
+phi = 0.05                                                                                  # growth scalar
+increase_percentile = 25                                                                    # percentile treated a Rref in INCREASE
+ 
+[out]                                                                                      
+out_after = 60                                                                              # streaming mode: dumps logs after X seconds
 filename = "single_file_test_0"
 
 [monitor.units]
@@ -34,6 +32,7 @@ left = ["rtt"]
 single_file_mode = true
 single_file_size_mbit = 500
 
+#streaming mode
 rate_mbit = 10
 granularity = 100
 iterations=650
