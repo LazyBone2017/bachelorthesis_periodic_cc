@@ -16,7 +16,7 @@ pip install -e .
 pip install -r requirements.txt
 
 if ! python3 -c "import tkinter" &>/dev/null; then
-  echo "Installing python3-tk for matplotlib GUI support (if available)..."
+  echo "Installing python3-tk for matplotlib GUI support"
   sudo apt-get update && sudo apt-get install -y python3-tk || echo "Skipping GUI backend (running headless)."
 fi
 

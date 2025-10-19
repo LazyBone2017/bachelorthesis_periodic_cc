@@ -46,7 +46,7 @@ class CubicCongestionControl(QuicCongestionControl):
 
         self.last_ack = 0.0
 
-        # addded for monitoring
+        # added for monitoring
         self.acked_bytes_in_interval = 0
         self.sent_bytes_in_interval = 0
         self.lost_byte_in_interval = 0

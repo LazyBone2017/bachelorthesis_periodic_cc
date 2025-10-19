@@ -1,16 +1,15 @@
 import asyncio
-import time
+
 try:
     import tomllib
 except ModuleNotFoundError:
     import tomli as tomllib
-import QuicClient
 import argparse
+import QuicClient
 from data_provider import provider
 
 
 async def main():
-
     send_data_queue = asyncio.Queue()
 
     parser = argparse.ArgumentParser()
@@ -22,7 +21,6 @@ async def main():
         config = tomllib.load(f)
         print("config read: ", config)
 
-    # Start the client and provider tasks
     client = QuicClient.QuicClient(
         "10.0.0.2", 4433, send_data_queue, external_config=config
     )
@@ -34,7 +32,6 @@ async def main():
         lambda t: print("TASK FINISHED:", t, "EXCEPTION:", t.exception())
     )
 
-    # Wait for both tasks to finish
     await asyncio.gather(provider_task, client_task)
     print("Main task stopped")
 

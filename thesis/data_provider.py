@@ -1,4 +1,3 @@
-# Simulating a provider feeding data to the queue
 import asyncio
 
 """
@@ -25,7 +24,6 @@ async def provider(queue, configuration):
 
     while True:
         queue.put_nowait(payload)
-        # print(f"[provider] Pushed: Data {counter} ({len(payload)} bytes)", flush=True)
 
         counter += 1 / subchunks
         if counter >= iterations:

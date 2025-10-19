@@ -18,19 +18,10 @@ import TimestampLogger
 
 from ..packet_builder import QuicSentPacket
 from .base import (
-    K_MINIMUM_WINDOW,
     QuicCongestionControl,
     QuicRttMonitor,
     register_congestion_control,
 )
-
-
-K_LOSS_REDUCTION_FACTOR = 0.5
-
-LOG = []
-ACK_BYTES_SUM = 0
-PACKET_LOG = []
-SAVED = False
 
 
 class OperationState(Enum):
@@ -60,10 +51,6 @@ class PulseCongestionControl(QuicCongestionControl):
         )
         self._frequency = float(external_config["cca"]["mod_rate"])
         self.sampling_interval = 1 / float(external_config["cca"]["sampling_rate"])
-
-        self.shallow_buffer_mitigation_active = external_config["cca"][
-            "shallow_buffer_mitigation"
-        ]
 
         self.rtt_estimate = external_config["cca"]["initial_rtt"]
         self.latest_rtt = external_config["cca"]["initial_rtt"]
@@ -127,9 +114,6 @@ class PulseCongestionControl(QuicCongestionControl):
         )
         print("config read @PULSE")
 
-    # RTT shold be determine sampling interval
-    # Mod Freq determines modulation interval
-
     def get_acked_byte_raw(self):
         temp = self.acked_byte_raw
         self.acked_byte_raw = 0
@@ -189,27 +173,18 @@ class PulseCongestionControl(QuicCongestionControl):
                 case OperationState.INCREASE:
                     self._base_cwnd = self.get_cwnd_base_next_step()
                     mean = np.percentile(
-                        self._analyzer_unit._congwin_to_response_ratio, self.increase_percentile
+                        self._analyzer_unit.congwin_to_response_ratio,
+                        self.increase_percentile,
                     )
                     if mean > 0.5:
                         print(self._base_cwnd)
                         self.change_operation_state(OperationState.CORRECT)
                 case OperationState.STATIC:
-                    # print("LOSS", (self._analyzer_unit._loss_rate[-1]))
-                    mean = np.mean(self._analyzer_unit._congwin_to_response_ratio)
-                    # (max_v, min_v) = self._analyzer_unit.get_R_extrema()
-                    if mean < 0.4 and (
-                        self.supressed_loss == 0
-                        or not self.shallow_buffer_mitigation_active
-                    ):
+                    mean = np.mean(self._analyzer_unit.congwin_to_response_ratio)
+                    if mean < 0.4:
                         self.change_operation_state(OperationState.CORRECT)
                     elif mean > 0.5:
                         self.change_operation_state(OperationState.CORRECT)
-                    elif (
-                        self._analyzer_unit._loss_rate[-1] > 0
-                        and self.shallow_buffer_mitigation_active
-                    ):
-                        self.change_operation_state(OperationState.SENSE)
                 case OperationState.CORRECT:
                     base = self._analyzer_unit.get_bdp_estimate()
                     if base is not None:
@@ -222,16 +197,7 @@ class PulseCongestionControl(QuicCongestionControl):
                     self.change_operation_state(OperationState.SENSE)
                 case OperationState.SENSE:
                     self.rtt_estimate = self._analyzer_unit.get_rtt_estimate()
-                    if (
-                        self._analyzer_unit._loss_rate[-1] > 0.01
-                        and self.shallow_buffer_mitigation_active
-                    ):
-                        if self.supressed_loss == 0 or False:
 
-                            self.supressed_loss = self._analyzer_unit._loss_rate[-1]
-                            print("supressed", self.supressed_loss)
-                        self._base_cwnd *= 0.99
-                        print("SENSE: BASE SET TO:", self._base_cwnd)
                     if self.state_active_over(
                         self._analyzer_unit.input_queue.maxlen * self.sampling_interval
                     ):
@@ -245,8 +211,6 @@ class PulseCongestionControl(QuicCongestionControl):
             sine_component = math.sin(2 * math.pi * self._frequency * delta_t)
 
             amplitude = self._base_cwnd * self._base_to_amplitude_ratio
-            """if sine_component < 0:
-                amplitude * 1.25"""
             self.congestion_window = int(self._base_cwnd + amplitude * sine_component)
 
             await asyncio.sleep(self.sampling_interval)
@@ -267,7 +231,6 @@ class PulseCongestionControl(QuicCongestionControl):
         self.sent_byte_raw += packet.sent_bytes
 
     def on_packets_expired(self, *, packets: Iterable[QuicSentPacket]) -> None:
-        print("Expired")
         for packet in packets:
             self.bytes_in_flight -= packet.sent_bytes
 
