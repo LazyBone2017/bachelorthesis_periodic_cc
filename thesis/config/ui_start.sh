@@ -15,15 +15,12 @@ else
     IS_DOCKER=false
 fi
 
-# --- Select Python binary ---
 if [ "$IS_DOCKER" = true ]; then
     PYTHON_BIN="python3"
 else
     PYTHON_BIN="$ROOT_DIR/.venv/bin/python"
 fi
 
-
-# Use sudo only if not already root (EUID 0)
 SUDO_CMD=""
 if [ "$EUID" -ne 0 ]; then
     SUDO_CMD="sudo"
