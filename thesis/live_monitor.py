@@ -18,6 +18,8 @@ import zmq
 
 from AnalyzerUnit import AnalyzerUnit
 
+SCREENSHOT_INDEX = 0
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", required=True)
 args = parser.parse_args()
@@ -112,9 +114,22 @@ def on_close(event):
 
 
 fig.canvas.mpl_connect("close_event", on_close)
+
 start_button_ax = fig.add_axes([0.8, 0.01, 0.1, 0.075])
 start_button = Button(start_button_ax, "Run")
 start_button.on_clicked(handle_start_button)
+
+
+def create_screenshot(event):
+    global SCREENSHOT_INDEX
+    plt.savefig(f"../data_out/monitor_{SCREENSHOT_INDEX}", dpi=300, bbox_inches="tight")
+    print(f"Screenshot saved to data_out/monitor_{SCREENSHOT_INDEX}.png")
+    SCREENSHOT_INDEX += 1
+
+
+screenshot_button_ax = fig.add_axes([0.69, 0.01, 0.1, 0.075])
+screenshot_button = Button(screenshot_button_ax, "Screenshot")
+screenshot_button.on_clicked(create_screenshot)
 
 plt.get_current_fig_manager().toolbar.pack_forget()
 
