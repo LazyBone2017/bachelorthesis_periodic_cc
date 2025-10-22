@@ -1,5 +1,6 @@
 [cca]
 name = "pulse"                                                                              # has to match cca key
+waveform = "sine"                                                                           # waveform of modulation: sine | square | triangle | saw
 mod_rate = 1                                                                                # modulation frequency
 cwnd_base_0 = 1200                                                                          # initial cwnd size
 base_to_amplitude_ratio = 0.25                                                              # alpha
