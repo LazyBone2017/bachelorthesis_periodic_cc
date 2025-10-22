@@ -12,8 +12,6 @@ class EchoProtocol(QuicConnectionProtocol):
     def quic_event_received(self, event):
         if isinstance(event, StreamDataReceived):
             print(f"[server] Received data: {len(event.data)}", flush=True)
-            if event.data.endswith(b"!"):
-                print(time.monotonic())
 
 
 async def main():
