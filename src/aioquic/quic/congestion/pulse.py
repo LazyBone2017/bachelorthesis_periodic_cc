@@ -56,6 +56,7 @@ class PulseCongestionControl(QuicCongestionControl):
         self.latest_rtt = external_config["cca"]["initial_rtt"]
         self.phi = external_config["cca"]["phi"]
         self.increase_percentile = external_config["cca"]["increase_percentile"]
+        self.waveform = external_config["cca"]["waveform"]
 
         self.acked_bytes_in_interval = 0
         self.sent_bytes_in_interval = 0
@@ -208,10 +209,19 @@ class PulseCongestionControl(QuicCongestionControl):
     async def modulate_congestion_window(self):
         while True:
             delta_t = time.monotonic() - self._start_time
-            sine_component = math.sin(2 * math.pi * self._frequency * delta_t)
+            periodic_component = None
+            match (self.waveform):
+                case "sine":
+                    periodic_component = math.sin(2 * math.pi * self._frequency * delta_t)
+                case "square":
+                    periodic_component = 1 if ((self._frequency * delta_t) % 1) < 0.5 else -1
+                case "triangle":
+                    periodic_component = 4 * abs((self._frequency * delta_t) % 1 - 0.5) - 1
+                case "saw":
+                    periodic_component = 2 * ((self._frequency * delta_t) % 1) - 1
 
             amplitude = self._base_cwnd * self._base_to_amplitude_ratio
-            self.congestion_window = int(self._base_cwnd + amplitude * sine_component)
+            self.congestion_window = int(self._base_cwnd + amplitude * periodic_component)
 
             await asyncio.sleep(self.sampling_interval)
 
