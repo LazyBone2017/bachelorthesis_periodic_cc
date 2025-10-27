@@ -9,7 +9,7 @@ if [ ! -d ".venv" ]; then
   python3 -m venv .venv
 fi
 
-# 2. activate and install deps
+# activate and install deps
 source .venv/bin/activate
 pip install --upgrade pip
 pip install -e .

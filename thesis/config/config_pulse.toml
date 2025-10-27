@@ -31,7 +31,7 @@ left = ["rtt"]
 
 [provider]
 single_file_mode = true
-single_file_size_mbit = 500
+single_file_size_mbit = 1000
 
 #streaming mode
 rate_mbit = 10
