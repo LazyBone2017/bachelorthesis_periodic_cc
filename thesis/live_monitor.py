@@ -186,5 +186,5 @@ def update(i):
 
 receiver = DataReceiver()
 threading.Thread(target=receiver.update_source, daemon=True).start()
-ani = animation.FuncAnimation(fig, update, interval=32)
+ani = animation.FuncAnimation(fig, update, interval=32, cache_frame_data=False)
 plt.show()
